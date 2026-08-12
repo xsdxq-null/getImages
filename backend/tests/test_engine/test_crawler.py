@@ -106,6 +106,26 @@ class TestCrawlProduct:
         manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
         assert manifest["status"] == "failed"
 
+    def test_title_without_media_failed(self, tmp_path, monkeypatch):
+        """页面有标题但四类资源全空 → 标记失败而非虚假 done。"""
+        title_only_html = """
+        <html><head><title>Some Product</title></head><body>
+        <script>
+        window.detailData = {"product": {"subject": "Some Product",
+          "mediaItems": [], "productHtmlDescription": "<p>no media</p>"}};
+        </script>
+        </body></html>
+        """
+        result = _run(
+            crawl_product(FakeFetcher(html=title_only_html, status=200), VALID_URL, tmp_path)
+        )
+        assert result.success is False
+        assert result.error is not None
+        assert "未提取到任何媒体资源" in (result.error or "")
+        manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+        assert manifest["status"] == "failed"
+        assert manifest["title"] == "Some Product"
+
     def test_invalid_url(self, tmp_path, monkeypatch):
         result = _run(
             crawl_product(

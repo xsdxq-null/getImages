@@ -86,21 +86,26 @@ async def crawl_product(
         len(media.detail_images), len(media.detail_videos),
     )
 
-    # ---- 2.1 内容级检测：200 但无商品数据（反爬跳转页/结构变更）→ 视为失败 ----
+    # ---- 2.1 内容级检测：四类资源全空 → 视为异常（反爬跳转页 / 媒体不可提取）----
     if (
-        media.title is None
-        and not media.main_images
+        not media.main_images
         and not media.main_videos
         and not media.detail_images
         and not media.detail_videos
     ):
-        msg = (
-            f"页面未提取到商品数据（标题与四类资源均为空），"
-            f"可能被反爬拦截或页面结构变更（strategy={result.strategy}）"
-        )
+        if media.title is None:
+            msg = (
+                f"页面未提取到商品数据（标题与四类资源均为空），"
+                f"可能被反爬拦截或页面结构变更（strategy={result.strategy}）"
+            )
+        else:
+            msg = (
+                f"页面可访问但未提取到任何媒体资源（标题: {media.title[:50]}），"
+                f"可能媒体被反爬隐藏或结构变更（strategy={result.strategy}）"
+            )
         logger.warning("[%s] %s", pid, msg)
-        _write_manifest(dest_dir, pid, url, None, [], "failed", error=msg)
-        return CrawlResult(product_id=pid, title=None, success=False, error=msg)
+        _write_manifest(dest_dir, pid, url, media.title, [], "failed", error=msg)
+        return CrawlResult(product_id=pid, title=media.title, success=False, error=msg)
 
     # ---- 3. 逐资源下载（单资源失败不中断） ----
     resources: list[dict] = []
