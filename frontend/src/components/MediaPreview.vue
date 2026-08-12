@@ -1,0 +1,119 @@
+<template>
+  <div class="media-preview">
+    <!-- 图片类资源 -->
+    <template v-if="isImage">
+      <div v-if="items.length" class="media-grid">
+        <el-image
+          v-for="(item, i) in items"
+          :key="i"
+          :src="displayUrl(item)"
+          :preview-src-list="items.map((x) => displayUrl(x))"
+          :initial-index="i"
+          fit="cover"
+          class="media-thumb"
+          :preview-teleported="true"
+          lazy
+        >
+          <template #error>
+            <div class="thumb-error">加载失败</div>
+          </template>
+        </el-image>
+      </div>
+      <el-empty v-else description="暂无该类资源" :image-size="60" />
+    </template>
+
+    <!-- 视频类资源 -->
+    <template v-else>
+      <div v-if="items.length" class="media-list">
+        <div v-for="(item, i) in items" :key="i" class="video-item">
+          <video :src="displayUrl(item)" controls preload="metadata" class="media-video" />
+          <div class="video-desc">
+            视频 {{ i + 1 }}
+            <el-tag v-if="item.status === 'failed'" type="danger" size="small">失败</el-tag>
+          </div>
+        </div>
+      </div>
+      <el-empty v-else description="暂无该类资源" :image-size="60" />
+    </template>
+  </div>
+</template>
+
+<script setup>
+import { computed } from 'vue'
+
+const props = defineProps({
+  /** 资源类别：main_image / detail_image / main_video / detail_video */
+  kind: { type: String, required: true },
+  /** 资源列表 [{url, file_path, status, ...}] */
+  resources: { type: Array, default: () => [] }
+})
+
+const isImage = computed(() => props.kind === 'main_image' || props.kind === 'detail_image')
+
+const items = computed(() => props.resources || [])
+
+/** 展示 URL：优先原始 url，缺失时用 file_path（FastAPI 静态托管时可直接访问） */
+function displayUrl(item) {
+  if (!item) return ''
+  if (item.url) return item.url
+  if (item.file_path) {
+    const p = item.file_path.replace(/\\/g, '/')
+    return p.startsWith('/') ? p : `/${p}`
+  }
+  return ''
+}
+</script>
+
+<style scoped>
+.media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.media-thumb {
+  width: 100%;
+  height: 120px;
+  border-radius: 6px;
+  border: 1px solid #e4e7ed;
+  background: #f5f7fa;
+  cursor: zoom-in;
+}
+
+.thumb-error {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #909399;
+  font-size: 12px;
+}
+
+.media-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.video-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.media-video {
+  width: 100%;
+  max-height: 320px;
+  border-radius: 6px;
+  background: #000;
+}
+
+.video-desc {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #606266;
+}
+</style>

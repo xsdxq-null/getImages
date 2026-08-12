@@ -1,0 +1,12 @@
+# getImages 后端依赖（宽松 >= 约束）
+fastapi>=0.115
+uvicorn[standard]>=0.30
+httpx>=0.27
+lxml>=5.0
+beautifulsoup4>=4.12
+pillow>=10.0
+pillow-avif-plugin>=1.4
+curl_cffi>=0.7
+python-multipart>=0.0.9
+playwright>=1.40
+pytest>=8.0
