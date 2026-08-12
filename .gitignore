@@ -21,3 +21,8 @@ Thumbs.db
 
 # Reasonix 会话记录
 .reasonix/
+.codegraph/
+
+# 本机杂项
+Reasonix.lnk
+backend/package-lock.json

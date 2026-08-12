@@ -252,10 +252,10 @@ function splitCSVLine(line) {
   return cells.map((s) => s.trim())
 }
 
-/** URL 合法性：http(s) 开头且末段含至少 5 位数字（商品 ID） */
+/** URL 合法性：http(s) 开头且末段含至少 5 位数字（商品 ID，兼容 _ID.html 格式） */
 function isValidUrl(u) {
   if (!/^https?:\/\//i.test(u)) return false
-  return /(\d{5,})(?:\/|\?|#|$)/.test(u)
+  return /(\d{5,})(?:[./?#]|$)/.test(u)
 }
 
 async function submit() {

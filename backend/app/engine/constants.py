@@ -48,8 +48,10 @@ def resource_filename(kind: str, index: int) -> str:
 def product_id_from_url(url: str) -> str | None:
     """从商品详情页 URL 提取商品 ID：URL 末段纯数字（至少 5 位）。
 
-    末段如 ``1234567890.html`` 会先去掉扩展名再判定纯数字；
-    不满足（如含标题前缀、不足 5 位、非 http 链接）返回 None。
+    兼容阿里巴巴国际站两种真实链接格式：
+    - ``https://www.alibaba.com/product-detail/1234567890.html``（纯数字末段）
+    - ``https://www.alibaba.com/product-detail/MyProduct_1234567890.html``（``<slug>_<id>`` 末段）
+    末段会先去掉扩展名再判定；不满足（如不含纯数字段、不足 5 位）返回 None。
     """
     if not url or not isinstance(url, str):
         return None
@@ -67,6 +69,11 @@ def product_id_from_url(url: str) -> str | None:
         stem = last
     if _PRODUCT_ID_RE.fullmatch(stem):
         return stem
+    # 兼容 <slug>_<productId> 格式：取 "_" 之后的纯数字段
+    if "_" in stem:
+        tail = stem.rsplit("_", 1)[1]
+        if _PRODUCT_ID_RE.fullmatch(tail):
+            return tail
     return None
 
 

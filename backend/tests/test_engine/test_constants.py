@@ -58,8 +58,25 @@ class TestProductIdFromUrl:
         ) is None
 
     def test_slug_prefix(self):
+        # 阿里真实链接：/product-detail/<slug>_<productId>.html
         assert product_id_from_url(
             "https://www.alibaba.com/product-detail/MyProduct_1234567890.html"
+        ) == "1234567890"
+
+    def test_slug_prefix_real_world(self):
+        assert product_id_from_url(
+            "https://www.alibaba.com/product-detail/"
+            "6-Styles-Leaf-Tray-Silicone-Mold_1601705630752.html"
+        ) == "1601705630752"
+        assert product_id_from_url(
+            "https://www.alibaba.com/product-detail/"
+            "LHY-Black-Detachable-Lace-Fake-Collar_1600380474007.html"
+            "?spm=a27aq.38837228.2794179700.5.59be7eb7pWlTC9"
+        ) == "1600380474007"
+
+    def test_slug_prefix_too_short(self):
+        assert product_id_from_url(
+            "https://www.alibaba.com/product-detail/MyProduct_1234.html"
         ) is None
 
     def test_empty_and_invalid(self):
@@ -94,6 +111,22 @@ class TestParseUrlList:
         assert urls == [
             "https://www.alibaba.com/product-detail/1234567890.html",
             "https://www.alibaba.com/product-detail/9876543210.html",
+        ]
+
+    def test_real_world_slug_urls(self):
+        text = (
+            "https://www.alibaba.com/product-detail/"
+            "6-Styles-Leaf-Tray-Silicone-Mold_1601705630752.html\n"
+            "https://www.alibaba.com/product-detail/"
+            "LHY-Black-Detachable-Lace-Fake-Collar_1600380474007.html"
+            "?spm=a27aq.38837228.2794179700.5.59be7eb7pWlTC9\n"
+        )
+        assert parse_url_list(text) == [
+            "https://www.alibaba.com/product-detail/"
+            "6-Styles-Leaf-Tray-Silicone-Mold_1601705630752.html",
+            "https://www.alibaba.com/product-detail/"
+            "LHY-Black-Detachable-Lace-Fake-Collar_1600380474007.html"
+            "?spm=a27aq.38837228.2794179700.5.59be7eb7pWlTC9",
         ]
 
     def test_invalid_filtered(self):

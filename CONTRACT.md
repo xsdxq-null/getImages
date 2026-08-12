@@ -84,7 +84,7 @@ def resource_filename(kind: str, index: int) -> str
 # main_image/detail_image: f"{prefix}_{index:03d}.jpg"（prefix=main/detail）
 # main_video/detail_video: f"{prefix}_video_{index:02d}.mp4"
 def product_id_from_url(url: str) -> str | None
-# 取 URL 末段纯数字（至少 5 位），否则 None
+# 取 URL 末段纯数字（至少 5 位），或 <slug>_<id> 末段中的 id，否则 None
 def parse_url_list(text: str) -> list[str]
 # 支持 txt 每行一个 / csv 含 url 列；去重保序；剔除非法
 ```
