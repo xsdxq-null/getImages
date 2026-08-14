@@ -187,11 +187,34 @@ def _extract_detail_html(product: dict) -> str | None:
 # 描述 HTML
 # ---------------------------------------------------------------------- #
 def extract_media_from_description(detail_html: str, page_url: str) -> tuple[list[str], list[str]]:
-    """从描述 HTML（页面 detailData 或 desc API 返回的 productHtmlDescription）提取图片与视频。
+    """从 desc API 返回的 productHtmlDescription 提取详情图与视频。
 
-    返回 (图片 URL 列表, 视频 URL 列表)，已去重。供 crawler 在页面被拦截时用 desc API 兜底。
+    详情图规则：只取 ``module-title="detailManyImage"`` 模块内所有 ``data-src``
+    （懒加载真实图；模块的 ``src`` 常为占位图，不采用）。模块缺失/为空时
+    退化为通用描述提取（避免漏图）。已去重。
     """
+    images = _extract_detail_many_images(detail_html, page_url)
+    if images:
+        return images, []
     return _extract_from_description(detail_html, page_url)
+
+
+def _extract_detail_many_images(detail_html: str, page_url: str) -> list[str]:
+    """提取 detailManyImage 模块内所有 img 的 data-src（仅 data-src，src 为占位图忽略）。"""
+    try:
+        tree = lxml.html.fromstring(detail_html)
+    except Exception:
+        return []
+    images: list[str] = []
+    for div in tree.xpath(
+        "//div[contains(translate(@module-title, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', "
+        "'abcdefghijklmnopqrstuvwxyz'), 'detailmanyimage')]"
+    ):
+        for img in div.xpath(".//img"):
+            src = img.get("data-src")
+            if src and _is_usable_url(src):
+                images.append(urljoin(page_url, src.strip()))
+    return _dedupe(images)
 
 
 def _extract_from_description(detail_html: str, page_url: str) -> tuple[list[str], list[str]]:

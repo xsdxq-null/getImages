@@ -66,3 +66,25 @@ class TestExtractMedia:
             "https://sc04.alicdn.com/kf/Hdef456.jpg",
         ]
         assert videos == ["https://video.alicdn.com/v/xx.mp4"]
+
+    def test_extract_media_detail_many_module(self):
+        """detailManyImage 模块限定：只取模块内 data-src，src 占位图与模块外 img 不取。"""
+        desc_html = """
+        <DIV id="detail_decorate_root">
+          <DIV module-title="detailSingleImage" class="J_module">
+            <IMG src="//u.alicdn.com/js/5v/esite/img/img-placeholder.png"
+                 data-src="//sc04.alicdn.com/kf/Hfirst.jpg" />
+          </DIV>
+          <DIV module-title="detailManyImage" class="J_module">
+            <IMG src="//u.alicdn.com/js/5v/esite/img/img-placeholder.png"
+                 data-src="//sc04.alicdn.com/kf/Hone.jpg" />
+            <IMG src="//sc04.alicdn.com/kf/Htwo.jpg" />
+          </DIV>
+          <IMG src="//sc04.alicdn.com/kf/Houtside.jpg" />
+        </DIV>
+        """
+        images, videos = extract_media_from_description(desc_html, SAMPLE_PRODUCT_URL)
+        # 只取 detailManyImage 内 data-src（Htwo 是 src 非 data-src，不取）；
+        # detailSingleImage 与模块外 img 均不取
+        assert images == ["https://sc04.alicdn.com/kf/Hone.jpg"]
+        assert videos == []
