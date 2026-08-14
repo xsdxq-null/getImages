@@ -19,7 +19,11 @@ from app.engine.constants import (
     resource_filename,
 )
 from app.engine.downloader import DownloadResult, download_media
-from app.engine.extractor import MediaSet, extract_media
+from app.engine.extractor import (
+    MediaSet,
+    extract_media,
+    extract_media_from_description,
+)
 from app.engine.fetcher import Fetcher, FetcherError
 
 logger = logging.getLogger(__name__)
@@ -85,6 +89,24 @@ async def crawl_product(
         len(media.main_images), len(media.main_videos),
         len(media.detail_images), len(media.detail_videos),
     )
+
+    # ---- 2.0 详情图 desc API 兜底：页面四类资源全空（登录墙/反爬拦截）时，
+    # 尝试免登录的 desc 接口获取 productHtmlDescription 提取详情图 ----
+    if (
+        not media.main_images
+        and not media.main_videos
+        and not media.detail_images
+        and not media.detail_videos
+    ):
+        detail_html = await _fetch_description_api(fetcher, pid)
+        if detail_html:
+            d_images, d_videos = extract_media_from_description(detail_html, page_url)
+            media.detail_images = d_images
+            media.detail_videos = d_videos
+            logger.info(
+                "[%s] desc API 兜底: 详情图%d 详情视%d",
+                pid, len(d_images), len(d_videos),
+            )
 
     # ---- 2.1 内容级检测：四类资源全空 → 视为异常（反爬跳转页 / 媒体不可提取）----
     if (
@@ -195,6 +217,33 @@ def _is_anti_bot_page(html: str) -> bool:
     lowered = html.lower()
     hits = sum(1 for m in _ANTI_BOT_MARKERS if m in lowered)
     return hits >= 2
+
+
+# 阿里巴巴详情描述接口（免登录，返回 productHtmlDescription）
+_DESC_API_URL = "https://www.alibaba.com/event/app/mainAction/desc.htm"
+
+
+async def _fetch_description_api(
+    fetcher: Fetcher, product_id: str, language: str = "en"
+) -> str | None:
+    """调用 desc 接口获取商品详情描述 HTML（登录墙/反爬拦截时的详情图兜底）。
+
+    页面被拦截时主图/标题仍拿不到，但 desc 接口通常可直连返回详情图 HTML。
+    返回 productHtmlDescription 字符串；失败返回 None（不影响主流程）。
+    """
+    url = f"{_DESC_API_URL}?detailId={product_id}&language={language}"
+    try:
+        result = await fetcher.fetch(url, referer="https://www.alibaba.com/")
+    except FetcherError:
+        return None
+    if result.status_code >= 400 or not result.html:
+        return None
+    try:
+        data = json.loads(result.html)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    desc = (data.get("data") or {}).get("productHtmlDescription")
+    return desc if isinstance(desc, str) and desc.strip() else None
 
 
 def _write_manifest(

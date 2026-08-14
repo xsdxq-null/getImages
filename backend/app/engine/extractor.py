@@ -186,6 +186,14 @@ def _extract_detail_html(product: dict) -> str | None:
 # ---------------------------------------------------------------------- #
 # 描述 HTML
 # ---------------------------------------------------------------------- #
+def extract_media_from_description(detail_html: str, page_url: str) -> tuple[list[str], list[str]]:
+    """从描述 HTML（页面 detailData 或 desc API 返回的 productHtmlDescription）提取图片与视频。
+
+    返回 (图片 URL 列表, 视频 URL 列表)，已去重。供 crawler 在页面被拦截时用 desc API 兜底。
+    """
+    return _extract_from_description(detail_html, page_url)
+
+
 def _extract_from_description(detail_html: str, page_url: str) -> tuple[list[str], list[str]]:
     images: list[str] = []
     videos: list[str] = []
@@ -234,14 +242,16 @@ def _extract_from_description(detail_html: str, page_url: str) -> tuple[list[str
 
 
 def _is_usable_url(url: str) -> bool:
-    """过滤掉 data:/javascript:/ 协议与纯锚点。"""
+    """过滤掉 data:/javascript:/ 协议、纯锚点与懒加载占位图。"""
     u = url.strip()
-    return bool(u) and not (
-        u.startswith("data:")
-        or u.startswith("javascript:")
-        or u.startswith("#")
-        or u.startswith("about:")
-    )
+    if not u:
+        return False
+    if u.startswith(("data:", "javascript:", "#", "about:")):
+        return False
+    # 懒加载占位图（如 u.alicdn.com/.../img-placeholder.png），非真实商品图
+    if any(m in u.lower() for m in ("img-placeholder", "placeholder.png", "placeholder.jpg")):
+        return False
+    return True
 
 
 def _dedupe(items: list[str]) -> list[str]:

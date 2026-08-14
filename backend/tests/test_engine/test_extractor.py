@@ -1,5 +1,5 @@
 """extractor.py 单元测试：detailData 提取、big/normal 优先级、描述 HTML 解析、urljoin。"""
-from app.engine.extractor import extract_media
+from app.engine.extractor import extract_media, extract_media_from_description
 from tests.test_engine.samples import SAMPLE_HTML, SAMPLE_PRODUCT_URL
 
 
@@ -48,3 +48,21 @@ class TestExtractMedia:
         ms = extract_media("<html><body>no data</body></html>", SAMPLE_PRODUCT_URL)
         assert ms.title is None
         assert ms.main_images == []
+
+    def test_extract_media_from_description(self):
+        """desc API 返回的 productHtmlDescription → 提取详情图（含懒加载与协议相对路径）。"""
+        desc_html = """
+        <DIV id="detail_decorate_root">
+          <img src="//sc04.alicdn.com/kf/Habc123.jpg" />
+          <img data-src="https://sc04.alicdn.com/kf/Hdef456.jpg" />
+          <img src="https://u.alicdn.com/js/5v/esite/img/img-placeholder.png" />
+          <video src="https://video.alicdn.com/v/xx.mp4"></video>
+          <img src="data:image/png;base64,AAAA" />
+        </DIV>
+        """
+        images, videos = extract_media_from_description(desc_html, SAMPLE_PRODUCT_URL)
+        assert images == [
+            "https://sc04.alicdn.com/kf/Habc123.jpg",
+            "https://sc04.alicdn.com/kf/Hdef456.jpg",
+        ]
+        assert videos == ["https://video.alicdn.com/v/xx.mp4"]

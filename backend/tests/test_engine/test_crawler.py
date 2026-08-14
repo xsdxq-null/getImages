@@ -129,6 +129,37 @@ class TestCrawlProduct:
         manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
         assert manifest["status"] == "failed"
 
+    def test_desc_api_fallback_rescues_detail_images(self, tmp_path, monkeypatch):
+        """登录墙页 + desc API 兜底：详情图成功提取，任务不再全空失败。"""
+        monkeypatch.setattr("app.engine.crawler.download_media", _fake_download_ok)
+
+        login_wall_html = """
+        <html><body><script>var link=document.getElementById("a-link");
+        link.href="https://login.alibaba.com/newlogin/icbuLogin.htm";</script>
+        window._config_ = {"action": "login"}</body></html>
+        """
+        desc_html = (
+            '<DIV id="detail_decorate_root">'
+            '<img src="//sc04.alicdn.com/kf/Habc123.jpg" />'
+            '<img data-src="https://sc04.alicdn.com/kf/Hdef456.jpg" />'
+            "</DIV>"
+        )
+        desc_payload = json.dumps({"data": {"productHtmlDescription": desc_html}})
+
+        class DescFallbackFetcher(FakeFetcher):
+            async def fetch(self, url, referer=None):
+                if "mainAction/desc.htm" in url:
+                    return FetchResult(200, desc_payload, url, "httpx")
+                return FetchResult(200, login_wall_html, url, "httpx")
+
+        result = _run(
+            crawl_product(DescFallbackFetcher(), VALID_URL, tmp_path)
+        )
+        assert result.success is True, result.error
+        assert len(result.resources) == 2  # 两张详情图
+        assert all(r["status"] == "done" for r in result.resources)
+        assert all(r["kind"] == "detail_image" for r in result.resources)
+
     def test_anti_bot_verify_page_failed(self, tmp_path, monkeypatch):
         """x5sec/滑块验证页（200 但无商品数据）→ 报错明确提示反爬验证拦截。"""
         verify_html = """
