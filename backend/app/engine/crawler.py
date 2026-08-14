@@ -100,6 +100,12 @@ async def crawl_product(
                     f"请先运行 python -m app.engine.login 登录后重启后端重试"
                     f"（strategy={result.strategy}）"
                 )
+            elif _is_anti_bot_page(result.html):
+                msg = (
+                    f"被目标站反爬验证拦截（x5sec/滑块验证），页面无可提取数据，"
+                    f"可能需要有效登录态或更换网络/降低频率"
+                    f"（strategy={result.strategy}）"
+                )
             else:
                 msg = (
                     f"页面未提取到商品数据（标题与四类资源均为空），"
@@ -160,6 +166,9 @@ async def crawl_product(
 
 _LOGIN_WALL_MARKERS = ("login.alibaba.com", "icbuLogin", "mini_login")
 
+# x5sec/滑块等反爬验证页特征（需至少命中 2 个才判定，避免误伤正常页面）
+_ANTI_BOT_MARKERS = ("x5sec", "captcha", "slider", "verify")
+
 
 def _is_login_wall(html: str) -> bool:
     """识别阿里巴巴登录墙/地区限制页：HTTP 200 但内容为登录跳转脚本（无商品数据）。
@@ -173,6 +182,19 @@ def _is_login_wall(html: str) -> bool:
     has_action_login = '"action": "login"' in html
     tiny_page = len(html) < 20_000 and "<title>" not in html
     return has_login_ref and (has_action_login or tiny_page)
+
+
+def _is_anti_bot_page(html: str) -> bool:
+    """识别 x5sec/滑块验证等反爬验证页（HTTP 200 但无可提取的商品数据）。
+
+    特征：命中至少 2 个反爬关键词（x5sec/captcha/slider/verify），
+    且页面不含真实商品数据（window.detailData），避免误判正常页。
+    """
+    if not html or "window.detailData" in html:
+        return False
+    lowered = html.lower()
+    hits = sum(1 for m in _ANTI_BOT_MARKERS if m in lowered)
+    return hits >= 2
 
 
 def _write_manifest(

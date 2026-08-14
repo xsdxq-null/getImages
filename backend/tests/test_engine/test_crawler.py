@@ -129,6 +129,23 @@ class TestCrawlProduct:
         manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
         assert manifest["status"] == "failed"
 
+    def test_anti_bot_verify_page_failed(self, tmp_path, monkeypatch):
+        """x5sec/滑块验证页（200 但无商品数据）→ 报错明确提示反爬验证拦截。"""
+        verify_html = """
+        <html><body>
+        <script>window.x5sec_verify = true; var cfg = {captcha: 'slider', verify: 1};</script>
+        <div class="captcha-slider">请拖动滑块完成验证</div>
+        </body></html>
+        """
+        result = _run(
+            crawl_product(FakeFetcher(html=verify_html, status=200), VALID_URL, tmp_path)
+        )
+        assert result.success is False
+        assert result.error is not None
+        assert "反爬验证" in (result.error or "")
+        manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+        assert manifest["status"] == "failed"
+
     def test_title_without_media_failed(self, tmp_path, monkeypatch):
         """页面有标题但四类资源全空 → 标记失败而非虚假 done。"""
         title_only_html = """
