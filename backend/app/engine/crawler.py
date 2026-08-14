@@ -94,10 +94,17 @@ async def crawl_product(
         and not media.detail_videos
     ):
         if media.title is None:
-            msg = (
-                f"页面未提取到商品数据（标题与四类资源均为空），"
-                f"可能被反爬拦截或页面结构变更（strategy={result.strategy}）"
-            )
+            if _is_login_wall(result.html):
+                msg = (
+                    f"页面要求登录（登录墙/地区限制），未提取到商品数据，"
+                    f"请先运行 python -m app.engine.login 登录后重启后端重试"
+                    f"（strategy={result.strategy}）"
+                )
+            else:
+                msg = (
+                    f"页面未提取到商品数据（标题与四类资源均为空），"
+                    f"可能被反爬拦截或页面结构变更（strategy={result.strategy}）"
+                )
         else:
             msg = (
                 f"页面可访问但未提取到任何媒体资源（标题: {media.title[:50]}），"
@@ -149,6 +156,23 @@ async def crawl_product(
         error=None,
         resources=resources,
     )
+
+
+_LOGIN_WALL_MARKERS = ("login.alibaba.com", "icbuLogin", "mini_login")
+
+
+def _is_login_wall(html: str) -> bool:
+    """识别阿里巴巴登录墙/地区限制页：HTTP 200 但内容为登录跳转脚本（无商品数据）。
+
+    特征：页面含登录跳转引用（login.alibaba.com / icbuLogin / mini_login），
+    且脚本声明 action=login，或页面极小且无 <title>（真实商品页数百 KB）。
+    """
+    if not html:
+        return False
+    has_login_ref = any(m in html for m in _LOGIN_WALL_MARKERS)
+    has_action_login = '"action": "login"' in html
+    tiny_page = len(html) < 20_000 and "<title>" not in html
+    return has_login_ref and (has_action_login or tiny_page)
 
 
 def _write_manifest(

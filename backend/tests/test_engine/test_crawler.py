@@ -106,6 +106,29 @@ class TestCrawlProduct:
         manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
         assert manifest["status"] == "failed"
 
+    def test_login_wall_page_failed(self, tmp_path, monkeypatch):
+        """登录墙页（200 但内容为登录跳转）→ 报错明确提示要求登录。"""
+        login_wall_html = """
+        <html><body>
+          <a id="a-link"></a>
+          <script>
+            var link = document.getElementById("a-link");
+            var host = "https://login.alibaba.com/newlogin/icbuLogin.htm?return_url=";
+            link.href = host + "https%3a%2f%2fwww.alibaba.com%2fproduct-detail%2f123";
+            window._config_ = {"action": "login", "url": "https://login.alibaba.com"};
+            link.click();
+          </script>
+        </body></html>
+        """
+        result = _run(
+            crawl_product(FakeFetcher(html=login_wall_html, status=200), VALID_URL, tmp_path)
+        )
+        assert result.success is False
+        assert result.error is not None
+        assert "要求登录" in (result.error or "")
+        manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+        assert manifest["status"] == "failed"
+
     def test_title_without_media_failed(self, tmp_path, monkeypatch):
         """页面有标题但四类资源全空 → 标记失败而非虚假 done。"""
         title_only_html = """

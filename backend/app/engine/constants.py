@@ -90,10 +90,12 @@ def parse_url_list(text: str) -> list[str]:
     - csv：若表头含 ``url`` 列（不区分大小写）则取该列，跳过表头；
     - txt：整行作为一个 URL；
     - 剔除空白行、``#`` 注释行与非法 URL（非 http(s) 或无法提取商品 ID）；
+    - 兼容 UTF-8 BOM 前缀（Windows 记事本等工具生成）；
     - 去重且保持首次出现顺序。
     """
     if not text:
         return []
+    text = text.lstrip("\ufeff")  # 剥离 UTF-8 BOM
     lines = [ln.strip() for ln in text.splitlines()]
     lines = [ln for ln in lines if ln and not ln.startswith("#")]
     if not lines:

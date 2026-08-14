@@ -190,7 +190,8 @@ function parseLocally(file) {
   return new Promise((resolve) => {
     const reader = new FileReader()
     reader.onload = () => {
-      const text = String(reader.result || '')
+      let text = String(reader.result || '')
+      text = text.replace(/^\uFEFF/, '') // 剥离 UTF-8 BOM（Windows 记事本等生成）
       const isCsv = /\.csv$/i.test(file.name)
       const lines = text
         .split(/\r?\n/)

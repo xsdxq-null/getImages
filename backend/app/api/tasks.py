@@ -26,7 +26,8 @@ def _parse_url_file(content: bytes) -> tuple[list[str], int]:
     """
     from app.engine.constants import parse_url_list  # 延迟导入（引擎隔离）
 
-    text = content.decode("utf-8", errors="replace")
+    # utf-8-sig：自动剥离 UTF-8 BOM（Windows 记事本等），无 BOM 时行为同 utf-8
+    text = content.decode("utf-8-sig", errors="replace")
     urls = parse_url_list(text)
     raw_lines = [
         ln.strip()

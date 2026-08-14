@@ -140,6 +140,36 @@ class TestParseUrlList:
             "https://www.alibaba.com/product-detail/9876543210.html",
         ]
 
+    def test_bom_prefix_txt(self):
+        """Windows 记事本等生成的 UTF-8 BOM 前缀不应影响解析。"""
+        urls = parse_url_list("\ufeff" + self.TXT)
+        assert urls == [
+            "https://www.alibaba.com/product-detail/1234567890.html",
+            "https://www.alibaba.com/product-detail/9876543210.html",
+        ]
+
+    def test_bom_csv_header(self):
+        """CSV 表头带 BOM 时仍能识别 url 列。"""
+        text = (
+            "\ufeffname,url,price\n"
+            "A,https://www.alibaba.com/product-detail/1234567890.html,10\n"
+        )
+        assert parse_url_list(text) == [
+            "https://www.alibaba.com/product-detail/1234567890.html",
+        ]
+
+    def test_bom_slug_url(self):
+        """用户上报场景：带 BOM 的 <slug>_<id> 真实链接。"""
+        urls = parse_url_list(
+            "\ufeff"
+            "https://www.alibaba.com/product-detail/"
+            "6-Styles-Leaf-Tray-Silicone-Mold_1601705630752.html\n"
+        )
+        assert urls == [
+            "https://www.alibaba.com/product-detail/"
+            "6-Styles-Leaf-Tray-Silicone-Mold_1601705630752.html",
+        ]
+
     def test_dedupe_keep_order(self):
         text = (
             "https://www.alibaba.com/product-detail/1234567890.html\n"
