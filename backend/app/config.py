@@ -13,6 +13,22 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 DEFAULT_DATA_DIR = BASE_DIR / "data"
 
 
+def _load_cookie() -> str:
+    """读取登录 cookie：环境变量 GETIMAGES_COOKIE 优先，其次 data/cookie.txt。
+
+    cookie.txt 由 ``python -m app.engine.login`` 一键登录后自动生成，
+    位于 data/ 目录（已被 .gitignore 忽略，敏感信息不入库）。
+    """
+    env = os.environ.get("GETIMAGES_COOKIE")
+    if env:
+        return env.strip()
+    p = Path(os.environ.get("GETIMAGES_DATA_DIR") or DEFAULT_DATA_DIR) / "cookie.txt"
+    try:
+        return p.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
 @dataclass
 class Settings:
     """后端全局配置。
@@ -27,6 +43,15 @@ class Settings:
     max_log_buffer: int = 2000     # 每任务内存日志缓冲条数（deque maxlen）
     default_rate_limit: float = 2.0   # 默认 秒/请求
     default_concurrency: int = 2      # 默认并发
+    cookie: str = field(default_factory=_load_cookie)  # 登录 cookie（可空）
+    # 代理：浏览器（playwright）不走系统代理，需显式配置；httpx/curl_cffi 自动读环境变量
+    proxy: str = field(default_factory=lambda: (
+        os.environ.get("PLAYWRIGHT_PROXY")
+        or os.environ.get("ALL_PROXY")
+        or os.environ.get("HTTPS_PROXY")
+        or os.environ.get("HTTP_PROXY")
+        or ""
+    ))
 
     @property
     def logs_dir(self) -> Path:
@@ -43,6 +68,11 @@ class Settings:
     @property
     def db_path(self) -> Path:
         return self.data_dir / "app.db"
+
+    @property
+    def login_state_path(self) -> Path:
+        """playwright 登录态（storage state）保存位置。"""
+        return self.data_dir / "login_state.json"
 
 
 settings = Settings()
@@ -65,10 +95,16 @@ def build_engine_config(task: dict) -> "EngineConfig":
             timeout: float = 30.0
             max_retries: int = 3
             user_agents: list = field(default_factory=list)
+            cookie: str = ""
+            login_state_path: str = ""
+            proxy: str = ""
 
     return EngineConfig(
         rate_limit=float(task.get("rate_limit") or settings.default_rate_limit),
         concurrency=int(task.get("concurrency") or settings.default_concurrency),
         timeout=settings.timeout,
         max_retries=settings.max_retries,
+        cookie=settings.cookie,
+        login_state_path=str(settings.login_state_path),
+        proxy=settings.proxy,
     )

@@ -8,5 +8,5 @@ pillow>=10.0
 pillow-avif-plugin>=1.4
 curl_cffi>=0.7
 python-multipart>=0.0.9
-playwright>=1.40
+playwright>=1.40   # 一键登录（python -m app.engine.login）与 L3 浏览器兜底；需另行 playwright install chromium
 pytest>=8.0

@@ -61,3 +61,14 @@ class TestFetcher:
         """Fetcher 默认携带 rate_limit=2.0 的限速器。"""
         f = Fetcher(EngineConfig())
         assert f.rate_limiter.min_interval == 2.0
+
+    def test_cookie_in_headers(self):
+        """配置了登录 cookie 时，请求头自动携带 Cookie（供 httpx/curl_cffi）。"""
+        f = Fetcher(EngineConfig(cookie="a=1; b=2"))
+        headers = f._browser_headers(URL, referer=None)
+        assert headers.get("Cookie") == "a=1; b=2"
+
+    def test_no_cookie_by_default(self):
+        """未配置 cookie 时请求头不含 Cookie（保持原有行为）。"""
+        f = Fetcher(EngineConfig())
+        assert "Cookie" not in f._browser_headers(URL, referer=None)

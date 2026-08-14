@@ -10,6 +10,7 @@ import asyncio
 import logging
 import random
 from dataclasses import dataclass
+from pathlib import Path
 
 import httpx
 
@@ -149,12 +150,21 @@ class Fetcher:
 
         headers = self._browser_headers(url, referer)
         ua = headers.pop("User-Agent")
+        # 登录态：login_state.json 存在时恢复（由 python -m app.engine.login 生成）
+        storage_state: str | None = None
+        if self.config.login_state_path:
+            state_file = Path(self.config.login_state_path)
+            if state_file.is_file():
+                storage_state = str(state_file)
         try:
             async with async_playwright() as p:
                 browser = await p.chromium.launch(headless=True)
                 try:
                     context = await browser.new_context(
-                        user_agent=ua, extra_http_headers=headers
+                        user_agent=ua,
+                        extra_http_headers=headers,
+                        storage_state=storage_state,
+                        proxy={"server": self.config.proxy} if self.config.proxy else None,
                     )
                     page = await context.new_page()
                     resp = await page.goto(
@@ -183,7 +193,7 @@ class Fetcher:
     # ------------------------------------------------------------------ #
     def _browser_headers(self, url: str, referer: str | None) -> dict[str, str]:
         ua = random.choice(self.config.user_agents)
-        return {
+        headers = {
             "User-Agent": ua,
             "Accept": (
                 "text/html,application/xhtml+xml,application/xml;q=0.9,"
@@ -195,3 +205,7 @@ class Fetcher:
             "sec-ch-ua-platform": '"Windows"',
             "Referer": referer or "https://www.alibaba.com/",
         }
+        # 登录态：config.cookie 由 app.config 从环境变量 / data/cookie.txt 注入
+        if self.config.cookie:
+            headers["Cookie"] = self.config.cookie
+        return headers
