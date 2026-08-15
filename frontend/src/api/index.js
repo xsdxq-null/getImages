@@ -106,6 +106,13 @@ export function fetchProduct(id) {
   return http.get(`/api/products/${id}`)
 }
 
+/** 批量保存商品资源的选中状态（下载时仅打包 selected=1 的资源） */
+export function saveResourcesSelection(id, selectedIds) {
+  return http.put(`/api/products/${id}/resources/selection`, {
+    selected_ids: selectedIds
+  })
+}
+
 /** 重试单个失败商品 */
 export function retryProduct(id) {
   return http.post(`/api/products/${id}/retry`)
