@@ -21,10 +21,15 @@
               <div class="thumb-error">加载失败</div>
             </template>
           </el-image>
-          <!-- 中间眼睛：点击预览大图（不触发选中切换） -->
-          <div class="media-eye" title="预览大图" @click.stop="openViewer(i)">
+          <!-- 中间眼睛：点击预览大图（不触发选中切换）；复用 el-button circle -->
+          <el-button
+            circle
+            class="media-eye"
+            title="预览大图"
+            @click.stop="openViewer(i)"
+          >
             <el-icon :size="18"><View /></el-icon>
-          </div>
+          </el-button>
         </div>
       </div>
       <el-empty v-else description="暂无该类资源" :image-size="60" />
@@ -185,28 +190,24 @@ function displayUrl(item) {
   box-shadow: 0 0 0 1px var(--el-color-primary);
 }
 
-/* 中间眼睛按钮：点击预览大图（不触发选中切换） */
+/* 中间眼睛按钮（el-button circle）：点击预览大图（不触发选中切换） */
 .media-eye {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   background: rgba(0, 0, 0, 0.45);
+  border-color: transparent;
   color: #fff;
-  border-radius: 50%;
-  cursor: pointer;
   opacity: 0.85;
-  transition: opacity 0.15s, background 0.15s;
 }
 
-.media-eye:hover {
-  opacity: 1;
+.media-eye:hover,
+.media-eye:focus {
   background: rgba(0, 0, 0, 0.65);
+  border-color: transparent;
+  color: #fff;
+  opacity: 1;
 }
 
 .media-cell .media-thumb {
