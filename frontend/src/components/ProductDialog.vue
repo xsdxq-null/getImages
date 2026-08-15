@@ -144,6 +144,15 @@ function toggleSelectAll(checked) {
   persistSelection()
 }
 
+/** 勾选变化（弹窗内 checkbox / 整图点击 / 全选）→ 防抖自动保存到后端 */
+watch(
+  () => selectedIds.value,
+  () => {
+    // load() 初始化选中状态时 loading=true，跳过（初始值无需回写）
+    if (!loading.value && product.value) persistSelection()
+  }
+)
+
 async function load() {
   if (!props.productId) return
   loading.value = true
