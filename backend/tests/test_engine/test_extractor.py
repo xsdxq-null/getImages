@@ -88,3 +88,21 @@ class TestExtractMedia:
         # detailSingleImage 与模块外 img 均不取
         assert images == ["https://sc04.alicdn.com/kf/Hone.jpg"]
         assert videos == []
+
+    def test_extract_media_skip_anchor_wrapped(self):
+        """a 标签包裹的 img（公司简介/外链图）不提取：直接包裹与间接包裹均跳过，普通 img 正常提取。"""
+        desc_html = """
+        <DIV id="detail_decorate_root">
+          <DIV module-title="detailManyImage" class="J_module">
+            <IMG data-src="//sc04.alicdn.com/kf/Hnormal1.jpg" />
+            <A href="https://www.alibaba.com/company"><IMG data-src="//sc04.alicdn.com/kf/Hcompany.jpg" /></A>
+            <A href="https://www.alibaba.com/"><SPAN><IMG data-src="//sc04.alicdn.com/kf/Hcompany2.jpg" /></SPAN></A>
+            <IMG data-src="//sc04.alicdn.com/kf/Hnormal2.jpg" />
+          </DIV>
+        </DIV>
+        """
+        images, _ = extract_media_from_description(desc_html, SAMPLE_PRODUCT_URL)
+        assert images == [
+            "https://sc04.alicdn.com/kf/Hnormal1.jpg",
+            "https://sc04.alicdn.com/kf/Hnormal2.jpg",
+        ]

@@ -200,7 +200,11 @@ def extract_media_from_description(detail_html: str, page_url: str) -> tuple[lis
 
 
 def _extract_detail_many_images(detail_html: str, page_url: str) -> list[str]:
-    """提取 detailManyImage 模块内所有 img 的 data-src（仅 data-src，src 为占位图忽略）。"""
+    """提取 detailManyImage 模块内所有 img 的 data-src（仅 data-src，src 为占位图忽略）。
+
+    **a 标签包裹的 img 不提取**：img 的祖先链（到模块 div 为止）中存在 ``<a>`` 时跳过，
+    此类图大概率是公司简介/外链图片（如 ``<a><img></a>`` 或 ``<a><span><img></span></a>``）。
+    """
     try:
         tree = lxml.html.fromstring(detail_html)
     except Exception:
@@ -212,9 +216,22 @@ def _extract_detail_many_images(detail_html: str, page_url: str) -> list[str]:
     ):
         for img in div.xpath(".//img"):
             src = img.get("data-src")
-            if src and _is_usable_url(src):
-                images.append(urljoin(page_url, src.strip()))
+            if not src or not _is_usable_url(src):
+                continue
+            if _has_anchor_ancestor(img, div):
+                continue
+            images.append(urljoin(page_url, src.strip()))
     return _dedupe(images)
+
+
+def _has_anchor_ancestor(img, module_div) -> bool:
+    """img 的祖先链（到所属模块 div 为止）中是否存在 <a> 标签。"""
+    node = img.getparent()
+    while node is not None and node is not module_div:
+        if isinstance(node.tag, str) and node.tag.lower() == "a":
+            return True
+        node = node.getparent()
+    return False
 
 
 def _extract_from_description(detail_html: str, page_url: str) -> tuple[list[str], list[str]]:
