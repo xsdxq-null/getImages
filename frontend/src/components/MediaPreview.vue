@@ -3,7 +3,7 @@
     <!-- 图片类资源 -->
     <template v-if="isImage">
       <div v-if="items.length" class="media-grid">
-        <div v-for="(item, i) in items" :key="i" class="media-cell">
+        <div v-for="(item, i) in items" :key="i" class="media-cell" :class="{ selected: isSelected(item.id) }">
           <el-checkbox
             v-model="selectedSet"
             :value="item.id"
@@ -37,6 +37,7 @@
             <el-checkbox
               v-model="selectedSet"
               :value="item.id"
+              class="media-check-inline"
               @change="onChange"
             />
             <div class="video-desc">
@@ -83,6 +84,10 @@ function onChange() {
   emit('update:selectedIds', [...selectedSet.value])
 }
 
+function isSelected(id) {
+  return selectedSet.value.includes(id)
+}
+
 /** 展示 URL：优先原始 url，缺失时用 file_path（FastAPI 静态托管时可直接访问） */
 function displayUrl(item) {
   if (!item) return ''
@@ -106,14 +111,44 @@ function displayUrl(item) {
   position: relative;
 }
 
+/* 紧凑多选框：去掉空白 label 占位与背景块，紧贴图片左上角 */
 .media-check {
   position: absolute;
-  top: 4px;
-  left: 4px;
+  top: 6px;
+  left: 6px;
   z-index: 2;
-  background: rgba(255, 255, 255, 0.85);
-  border-radius: 4px;
-  padding: 2px;
+  margin: 0;
+  padding: 0;
+}
+
+.media-check :deep(.el-checkbox__label) {
+  display: none;
+}
+
+.media-check :deep(.el-checkbox__input) {
+  margin-right: 0;
+}
+
+/* 视频行内多选框：同样去空白 label 占位，但保持文档流内 */
+.media-check-inline {
+  margin: 0;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.media-check-inline :deep(.el-checkbox__label) {
+  display: none;
+}
+
+.media-check-inline :deep(.el-checkbox__input) {
+  margin-right: 0;
+}
+
+/* 选中状态：图片边框高亮 */
+.media-cell.selected .media-thumb {
+  border-color: var(--el-color-primary);
+  border-width: 2px;
+  box-shadow: 0 0 0 1px var(--el-color-primary);
 }
 
 .media-thumb {
