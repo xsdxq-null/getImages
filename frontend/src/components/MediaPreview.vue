@@ -3,7 +3,7 @@
     <!-- 图片类资源 -->
     <template v-if="isImage">
       <div v-if="items.length" class="media-grid">
-        <div v-for="(item, i) in items" :key="i" class="media-cell" :class="{ selected: isSelected(item.id) }">
+        <div v-for="(item, i) in items" :key="i" class="media-cell" :class="{ selected: isSelected(item.id) }" @click="toggleSelect(item.id)">
           <el-checkbox
             v-model="selectedSet"
             :value="item.id"
@@ -13,17 +13,18 @@
           />
           <el-image
             :src="displayUrl(item)"
-            :preview-src-list="items.map((x) => displayUrl(x))"
-            :initial-index="i"
             fit="cover"
             class="media-thumb"
-            :preview-teleported="true"
             lazy
           >
             <template #error>
               <div class="thumb-error">加载失败</div>
             </template>
           </el-image>
+          <!-- 中间眼睛：点击预览大图（不触发选中切换） -->
+          <div class="media-eye" title="预览大图" @click.stop="openViewer(i)">
+            <el-icon :size="18"><View /></el-icon>
+          </div>
         </div>
       </div>
       <el-empty v-else description="暂无该类资源" :image-size="60" />
@@ -51,10 +52,20 @@
       <el-empty v-else description="暂无该类资源" :image-size="60" />
     </template>
   </div>
+
+  <!-- 大图预览（点击眼睛按钮打开） -->
+  <el-image-viewer
+    v-if="viewerVisible"
+    :url-list="previewUrls"
+    :initial-index="previewIndex"
+    teleported
+    @close="viewerVisible = false"
+  />
 </template>
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { View } from '@element-plus/icons-vue'
 
 const props = defineProps({
   /** 资源类别：main_image / detail_image / main_video / detail_video */
@@ -86,6 +97,29 @@ function onChange() {
 
 function isSelected(id) {
   return selectedSet.value.includes(id)
+}
+
+/** 点击图片（非眼睛按钮区域）：切换选中状态 */
+function toggleSelect(id) {
+  const idx = selectedSet.value.indexOf(id)
+  if (idx >= 0) {
+    selectedSet.value.splice(idx, 1)
+  } else {
+    selectedSet.value.push(id)
+  }
+  onChange()
+}
+
+/* ------------------------------ 大图预览 ------------------------------ */
+
+const viewerVisible = ref(false)
+const previewIndex = ref(0)
+
+const previewUrls = computed(() => items.value.map((x) => displayUrl(x)))
+
+function openViewer(i) {
+  previewIndex.value = i
+  viewerVisible.value = true
 }
 
 /** 展示 URL：优先原始 url，缺失时用 file_path（FastAPI 静态托管时可直接访问） */
@@ -149,6 +183,34 @@ function displayUrl(item) {
   border-color: var(--el-color-primary);
   border-width: 2px;
   box-shadow: 0 0 0 1px var(--el-color-primary);
+}
+
+/* 中间眼睛按钮：点击预览大图（不触发选中切换） */
+.media-eye {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.media-eye:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.media-cell .media-thumb {
+  cursor: pointer;
 }
 
 .media-thumb {
