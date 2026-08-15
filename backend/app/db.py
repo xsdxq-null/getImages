@@ -51,7 +51,8 @@ CREATE TABLE IF NOT EXISTS resources (
   file_path TEXT,
   size INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'pending',
-  retries INTEGER NOT NULL DEFAULT 0
+  retries INTEGER NOT NULL DEFAULT 0,
+  selected INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE INDEX IF NOT EXISTS idx_products_task ON products(task_id);
@@ -70,7 +71,17 @@ def init_db(db_path: str | Path | None = None) -> str:
     _db_path = str(db_path)
     with _connect() as conn:
         conn.executescript(SCHEMA)
+        _migrate(conn)
     return _db_path
+
+
+def _migrate(conn) -> None:
+    """旧库迁移：为缺失的新列补 ALTER TABLE（幂等，列已存在时跳过）。"""
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(resources)").fetchall()}
+    if "selected" not in cols:
+        conn.execute(
+            "ALTER TABLE resources ADD COLUMN selected INTEGER NOT NULL DEFAULT 1"
+        )
 
 
 def current_db_path() -> str:

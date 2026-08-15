@@ -2,12 +2,18 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from .. import models
 from ..scheduler import scheduler
 from .download import build_product_zip
 
 router = APIRouter(prefix="/products", tags=["products"])
+
+
+class ResourceSelection(BaseModel):
+    """批量选中状态：selected_ids 内的资源 selected=1，其余置 0。"""
+    selected_ids: list[int]
 
 
 def _require_product(row_id: int) -> dict:
@@ -49,6 +55,14 @@ async def retry_product(row_id: int):
 
 @router.get("/{row_id}/download")
 async def product_download(row_id: int):
-    """单商品 zip（仅打包成功资源）。"""
+    """单商品 zip（仅打包成功且被选中的资源）。"""
     product = _require_product(row_id)
     return build_product_zip(product)
+
+
+@router.put("/{row_id}/resources/selection")
+async def product_resources_selection(row_id: int, body: ResourceSelection):
+    """保存商品资源的选中状态（下载时仅打包 selected=1 的资源）。"""
+    _require_product(row_id)
+    models.update_resources_selection(row_id, body.selected_ids)
+    return {"ok": True, "product_id": row_id, "selected_count": len(body.selected_ids)}

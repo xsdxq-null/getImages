@@ -43,7 +43,7 @@ getImages/
 | --- | --- |
 | `tasks` | id INTEGER PK, name TEXT, url_file TEXT, status TEXT, total INTEGER, succeeded INTEGER, failed INTEGER, rate_limit REAL, concurrency INTEGER, created_at TEXT, started_at TEXT, finished_at TEXT |
 | `products` | id INTEGER PK, task_id INTEGER FK, product_id TEXT, url TEXT, title TEXT, status TEXT, error TEXT, fetched_at TEXT |
-| `resources` | id INTEGER PK, product_id INTEGER FK, kind TEXT, url TEXT, file_path TEXT, size INTEGER, status TEXT, retries INTEGER |
+| `resources` | id INTEGER PK, product_id INTEGER FK, kind TEXT, url TEXT, file_path TEXT, size INTEGER, status TEXT, retries INTEGER, selected INTEGER（默认 1：是否参与打包下载） |
 
 - `tasks.status`：`pending | running | paused | cancelled | done | partial`
 - `products.status`：`pending | fetching | done | failed`
@@ -67,7 +67,8 @@ getImages/
 | GET | `/api/tasks/{id}/download` | 全任务 zip（运行中返回 409） |
 | GET | `/api/products/{id}` | 单商品详情（含 resources 列表） |
 | POST | `/api/products/{id}/retry` | 重试单个失败商品 |
-| GET | `/api/products/{id}/download` | 单商品 zip（Could，实现简单则做） |
+| GET | `/api/products/{id}/download` | 单商品 zip（Could，实现简单则做；仅打包 selected=1 的资源） |
+| PUT | `/api/products/{id}/resources/selection` | body `{selected_ids: [int]}`：批量保存选中状态（id 在列表内 selected=1，其余置 0），任务/商品下载仅打包 selected=1 |
 
 错误统一 `{"detail": "..."}`；成功 JSON 直接返回对象/数组。
 

@@ -225,6 +225,19 @@ def list_resources(product_row_id: int) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def update_resources_selection(product_row_id: int, selected_ids: list[int]) -> None:
+    """批量设置商品下资源的选中状态：id 在 selected_ids 的置 1，其余置 0。"""
+    selected_ids = [int(i) for i in selected_ids]
+    with db.connection() as conn:
+        conn.execute("UPDATE resources SET selected=0 WHERE product_id=?", (product_row_id,))
+        if selected_ids:
+            placeholders = ",".join("?" * len(selected_ids))
+            conn.execute(
+                f"UPDATE resources SET selected=1 WHERE product_id=? AND id IN ({placeholders})",
+                (product_row_id, *selected_ids),
+            )
+
+
 def resource_counts_for_task(task_id: int) -> dict[int, dict[str, dict]]:
     """任务下每商品的四类资源完成计数：{product_id: {kind: {"done": n, "total": m}}}。"""
     with db.connection() as conn:
@@ -252,7 +265,8 @@ def task_download_resources(task_id: int) -> list[dict]:
             "SELECT p.id AS product_row_id, p.product_id AS product_no, "
             "r.kind AS kind, r.file_path AS file_path, r.url AS url "
             "FROM resources r JOIN products p ON r.product_id = p.id "
-            "WHERE p.task_id=? AND r.status='done' AND r.file_path IS NOT NULL AND r.file_path<>''",
+            "WHERE p.task_id=? AND r.status='done' AND r.file_path IS NOT NULL "
+            "AND r.file_path<>'' AND r.selected=1",
             (task_id,),
         ).fetchall()
     return [dict(r) for r in rows]
@@ -262,7 +276,8 @@ def product_download_resources(product_row_id: int) -> list[dict]:
     with db.connection() as conn:
         rows = conn.execute(
             "SELECT kind, file_path, url FROM resources "
-            "WHERE product_id=? AND status='done' AND file_path IS NOT NULL AND file_path<>''",
+            "WHERE product_id=? AND status='done' AND file_path IS NOT NULL "
+            "AND file_path<>'' AND selected=1",
             (product_row_id,),
         ).fetchall()
     return [dict(r) for r in rows]
