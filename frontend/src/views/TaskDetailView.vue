@@ -113,9 +113,17 @@
               <span v-else class="muted">—</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="160" align="center" fixed="right">
+          <el-table-column label="操作" width="200" align="center" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click.stop="openProduct(row)">预览</el-button>
+              <el-button
+                link
+                type="success"
+                :loading="downloadingId === row.id"
+                @click.stop="downloadProduct(row)"
+              >
+                下载
+              </el-button>
               <el-button
                 v-if="row.status === 'failed'"
                 link
@@ -176,6 +184,7 @@ import {
   resumeTask,
   retryProduct as apiRetryProduct,
   downloadTaskZip,
+  downloadProductZip,
   getErrorMessage
 } from '../api'
 import {
@@ -203,6 +212,7 @@ const productsPageSize = ref(20)
 const productsLoading = ref(false)
 const statusFilter = ref('')
 const retryingId = ref(null)
+const downloadingId = ref(null)
 
 const dialogVisible = ref(false)
 const activeProductId = ref(null)
@@ -350,6 +360,28 @@ async function retryProduct(row) {
     /* 拦截器已提示 */
   } finally {
     retryingId.value = null
+  }
+}
+
+/** 打包下载该商品选中的资源（后端仅打包 selected=1 的资源） */
+async function downloadProduct(row) {
+  downloadingId.value = row.id
+  try {
+    const blob = await downloadProductZip(row.id)
+    if (blob && blob.size > 0) {
+      downloadBlob(blob, `product_${row.product_id}_download.zip`)
+      ElMessage.success(`商品 ${row.product_id} 选中资源已打包下载`)
+    } else {
+      ElMessage.warning(`商品 ${row.product_id} 没有选中的可用资源`)
+    }
+  } catch (e) {
+    if (e.response?.status === 409) {
+      ElMessage.warning('商品仍在抓取中，请稍后再试')
+    } else {
+      ElMessage.error(getErrorMessage(e, '打包下载失败，请稍后重试'))
+    }
+  } finally {
+    downloadingId.value = null
   }
 }
 

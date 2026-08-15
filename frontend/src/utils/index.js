@@ -55,9 +55,9 @@ export function calcSuccessRate(total, succeeded) {
 /**
  * 读取商品行中某类资源的完成计数。
  * 兼容两种后端返回形态：
- *  - resource_counts: { main_image: {done, total} }（对象/数组）
+ *  - resource_counts: { main_image: {done, total, selected} }（对象/数组）
  *  - main_image_done / main_image_count 扁平字段
- * 返回 'done/total' 或 'done'
+ * 有 selected 计数时返回 'selected/total'（下载选中的语义），否则返回 'done/total'
  */
 export function resourceCountText(row, kind) {
   const rc = row && row.resource_counts
@@ -66,6 +66,10 @@ export function resourceCountText(row, kind) {
     if (typeof c === 'object' && c !== null) {
       const done = c.done ?? 0
       const total = c.total ?? 0
+      if (c.selected != null) {
+        const sel = c.selected ?? 0
+        return total ? `${sel}/${total}` : `${sel}`
+      }
       return total ? `${done}/${total}` : `${done}`
     }
     return String(c)

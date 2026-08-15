@@ -239,22 +239,28 @@ def update_resources_selection(product_row_id: int, selected_ids: list[int]) -> 
 
 
 def resource_counts_for_task(task_id: int) -> dict[int, dict[str, dict]]:
-    """任务下每商品的四类资源完成计数：{product_id: {kind: {"done": n, "total": m}}}。"""
+    """任务下每商品的四类资源计数：{product_id: {kind: {"done": n, "total": m, "selected": k}}}。
+
+    ``selected`` = 状态 done 且 selected=1 的可下载资源数（用于展示/下载选中）。
+    """
     with db.connection() as conn:
         rows = conn.execute(
-            "SELECT r.product_id AS pid, r.kind AS kind, r.status AS status, COUNT(*) AS c "
+            "SELECT r.product_id AS pid, r.kind AS kind, r.status AS status, "
+            "r.selected AS selected, COUNT(*) AS c "
             "FROM resources r JOIN products p ON r.product_id = p.id "
-            "WHERE p.task_id=? GROUP BY r.product_id, r.kind, r.status",
+            "WHERE p.task_id=? GROUP BY r.product_id, r.kind, r.status, r.selected",
             (task_id,),
         ).fetchall()
     out: dict[int, dict[str, dict]] = {}
     for r in rows:
         pid = r["pid"]
         kind_map = out.setdefault(pid, {})
-        entry = kind_map.setdefault(r["kind"], {"done": 0, "total": 0})
+        entry = kind_map.setdefault(r["kind"], {"done": 0, "total": 0, "selected": 0})
         entry["total"] += r["c"]
         if r["status"] == "done":
             entry["done"] += r["c"]
+            if r["selected"] == 1:
+                entry["selected"] += r["c"]
     return out
 
 
