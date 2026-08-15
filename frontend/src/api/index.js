@@ -75,6 +75,7 @@ export const startTask = (id) => http.post(`/api/tasks/${id}/start`)
 export const pauseTask = (id) => http.post(`/api/tasks/${id}/pause`)
 export const cancelTask = (id) => http.post(`/api/tasks/${id}/cancel`)
 export const resumeTask = (id) => http.post(`/api/tasks/${id}/resume`)
+export const deleteTask = (id) => http.delete(`/api/tasks/${id}`)
 
 /** 任务商品列表（分页 + 状态过滤） */
 export function fetchTaskProducts(id, params = {}) {

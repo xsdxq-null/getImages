@@ -1,6 +1,8 @@
 """任务相关 API（CONTRACT 第 3 节 tasks 端点）。"""
 from __future__ import annotations
 
+import shutil
+
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 
@@ -93,6 +95,42 @@ async def list_tasks(
 @router.get("/{task_id}")
 async def task_detail(task_id: int):
     return _require_task(task_id)
+
+
+@router.delete("/{task_id}")
+async def delete_task(task_id: int):
+    """删除任务：级联删除 products/resources 记录与磁盘文件（下载/上传/日志）。
+
+    运行中（running/paused）任务不可删除（409），需先取消。
+    """
+    task = _require_task(task_id)
+    if task["status"] in ("running", "paused"):
+        raise HTTPException(
+            status_code=409,
+            detail=f"任务状态为 {task['status']}，运行中不可删除，请先取消",
+        )
+
+    # 清理磁盘文件（容错：文件缺失/权限问题不阻断）
+    cleanup_paths = [
+        settings.downloads_dir / str(task_id),
+        settings.uploads_dir / f"task_{task_id}.txt",
+        settings.logs_dir / f"task_{task_id}.log",
+    ]
+    for p in cleanup_paths:
+        try:
+            if p.is_dir():
+                shutil.rmtree(p, ignore_errors=True)
+            elif p.exists():
+                p.unlink(missing_ok=True)
+        except OSError:  # pragma: no cover
+            pass
+
+    removed_resources = models.delete_task(task_id)
+    return {
+        "ok": True,
+        "id": task_id,
+        "removed_resources": removed_resources,
+    }
 
 
 @router.post("/{task_id}/start")

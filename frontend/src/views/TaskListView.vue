@@ -43,9 +43,10 @@
         <el-table-column label="创建时间" width="170" align="center">
           <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="90" align="center" fixed="right">
+        <el-table-column label="操作" width="150" align="center" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click.stop="goDetail(row)">详情</el-button>
+            <el-button link type="danger" @click.stop="onDelete(row)">删除</el-button>
           </template>
         </el-table-column>
         <template #empty>
@@ -72,7 +73,8 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
-import { fetchTasks } from '../api'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { fetchTasks, deleteTask } from '../api'
 import { TASK_STATUS_MAP, formatTime, calcSuccessRate } from '../utils'
 
 const router = useRouter()
@@ -82,6 +84,7 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const loading = ref(false)
+const deletingId = ref(null)
 
 let timer = null
 
@@ -115,6 +118,37 @@ function onSizeChange(size) {
 
 function goDetail(row) {
   router.push(`/tasks/${row.id}`)
+}
+
+/** 删除任务（含关联图片等文件）；运行中任务后端返回 409 拒绝 */
+async function onDelete(row) {
+  if (row.status === 'running' || row.status === 'paused') {
+    ElMessage.warning('任务运行中不可删除，请先取消')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确定删除任务「${row.name || `#${row.id}`}」吗？\n将同时删除该任务下载的图片/视频等文件，且不可恢复。`,
+      '删除确认',
+      { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' }
+    )
+  } catch {
+    return // 用户取消
+  }
+  deletingId.value = row.id
+  try {
+    await deleteTask(row.id)
+    ElMessage.success('任务已删除')
+    await load()
+  } catch (e) {
+    if (e.response?.status === 409) {
+      ElMessage.warning('任务运行中不可删除，请先取消')
+    } else {
+      ElMessage.error('删除失败，请稍后重试')
+    }
+  } finally {
+    deletingId.value = null
+  }
 }
 
 onMounted(() => {

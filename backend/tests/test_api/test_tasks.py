@@ -108,6 +108,46 @@ class TestTaskList:
         assert client.get("/api/tasks/99999").status_code == 404
 
 
+class TestTaskDelete:
+    def test_delete_task_and_files(self, client):
+        """删除任务：DB 记录级联删除 + 磁盘文件（下载/上传/日志）清理。"""
+        from app import config as app_config
+
+        task = _create_task(client)
+        tid = task["id"]
+        # 造磁盘文件
+        ddir = app_config.settings.downloads_dir / str(tid)
+        ddir.mkdir(parents=True, exist_ok=True)
+        (ddir / "img.jpg").write_bytes(b"X")
+        up = app_config.settings.uploads_dir / f"task_{tid}.txt"
+        up.write_bytes(b"urls")
+        app_config.settings.logs_dir.mkdir(parents=True, exist_ok=True)
+        log = app_config.settings.logs_dir / f"task_{tid}.log"
+        log.write_bytes(b"log")
+
+        resp = client.delete(f"/api/tasks/{tid}")
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is True
+        # DB：任务、商品、资源均删
+        assert client.get(f"/api/tasks/{tid}").status_code == 404
+        # 磁盘文件清空
+        assert not ddir.exists()
+        assert not up.exists()
+        assert not log.exists()
+
+    def test_delete_running_409(self, client, fake_scheduler):
+        """运行中任务不可删除。"""
+        task = _create_task(client)
+        client.post(f"/api/tasks/{task['id']}/start")  # → running
+        resp = client.delete(f"/api/tasks/{task['id']}")
+        assert resp.status_code == 409
+        # 任务仍在
+        assert client.get(f"/api/tasks/{task['id']}").status_code == 200
+
+    def test_delete_404(self, client):
+        assert client.delete("/api/tasks/99999").status_code == 404
+
+
 class TestTaskControl:
     def test_start(self, client, fake_scheduler):
         task = _create_task(client)

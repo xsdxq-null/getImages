@@ -81,6 +81,27 @@ def list_tasks(page: int = 1, page_size: int = 20) -> tuple[list[dict], int]:
     return items, total
 
 
+def delete_task(task_id: int) -> int:
+    """删除任务及其关联 products/resources 记录，返回删除的 resources 数。
+
+    磁盘文件（downloads/uploads/logs）由调用方（API 层）负责清理。
+    """
+    with db.connection() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS c FROM resources r JOIN products p "
+            "ON r.product_id = p.id WHERE p.task_id=?",
+            (task_id,),
+        ).fetchone()
+        conn.execute(
+            "DELETE FROM resources WHERE product_id IN "
+            "(SELECT id FROM products WHERE task_id=?)",
+            (task_id,),
+        )
+        conn.execute("DELETE FROM products WHERE task_id=?", (task_id,))
+        conn.execute("DELETE FROM tasks WHERE id=?", (task_id,))
+    return row["c"]
+
+
 def update_task_status(task_id: int, status: str | None = None,
                        started_at: str | None = None,
                        finished_at: str | None = None) -> None:
