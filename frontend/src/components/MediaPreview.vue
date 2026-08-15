@@ -70,12 +70,12 @@ const isImage = computed(() => props.kind === 'main_image' || props.kind === 'de
 
 const items = computed(() => props.resources || [])
 
-const selectedSet = ref(new Set(props.selectedIds))
+const selectedSet = ref([...props.selectedIds])
 
 watch(
   () => props.selectedIds,
   (ids) => {
-    selectedSet.value = new Set(ids)
+    selectedSet.value = [...ids]
   }
 )
 
