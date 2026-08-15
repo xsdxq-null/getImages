@@ -200,28 +200,55 @@ def extract_media_from_description(detail_html: str, page_url: str) -> tuple[lis
 
 
 def _extract_detail_many_images(detail_html: str, page_url: str) -> list[str]:
-    """提取 detailManyImage 模块内所有 img 的 data-src（仅 data-src，src 为占位图忽略）。
+    """提取详情图：所有 detailSingleImage 模块 + 第一处 detailManyImage 模块的 data-src。
 
-    **a 标签包裹的 img 不提取**：img 的祖先链（到模块 div 为止）中存在 ``<a>`` 时跳过，
-    此类图大概率是公司简介/外链图片（如 ``<a><img></a>`` 或 ``<a><span><img></span></a>``）。
+    - ``detailSingleImage`` 全部模块都取（含顶部 banner，不同商品结构不同，不做位置硬编码）；
+    - ``detailManyImage`` **只取第一处**（多处时忽略其余，后续模块多为其他内容图）；
+    - 仅取 ``data-src``（``src`` 为懒加载占位图，忽略）；
+    - **a 标签包裹的 img 不提取**：img 的祖先链（到所属模块 div 为止）中存在 ``<a>`` 时跳过，
+      此类图大概率是公司简介/外链图片（如 ``<a><img></a>`` 或 ``<a><span><img></span></a>``）。
     """
     try:
         tree = lxml.html.fromstring(detail_html)
     except Exception:
         return []
     images: list[str] = []
+
+    def _append(img) -> None:
+        src = img.get("data-src")
+        if not src or not _is_usable_url(src):
+            return
+        if _has_anchor_ancestor(img, _module_of(img, tree)):
+            return
+        images.append(urljoin(page_url, src.strip()))
+
+    # detailSingleImage：全部模块
     for div in tree.xpath(
         "//div[contains(translate(@module-title, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', "
-        "'abcdefghijklmnopqrstuvwxyz'), 'detailmanyimage')]"
+        "'abcdefghijklmnopqrstuvwxyz'), 'detailsingleimage')]"
     ):
         for img in div.xpath(".//img"):
-            src = img.get("data-src")
-            if not src or not _is_usable_url(src):
-                continue
-            if _has_anchor_ancestor(img, div):
-                continue
-            images.append(urljoin(page_url, src.strip()))
+            _append(img)
+
+    # detailManyImage：只取第一处
+    many_divs = tree.xpath(
+        "//div[contains(translate(@module-title, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', "
+        "'abcdefghijklmnopqrstuvwxyz'), 'detailmanyimage')]"
+    )
+    if many_divs:
+        for img in many_divs[0].xpath(".//img"):
+            _append(img)
     return _dedupe(images)
+
+
+def _module_of(img, tree) -> object:
+    """返回 img 所属的模块 div（向上找到第一个含 module-title 的 div；找不到返回 tree 根）。"""
+    node = img.getparent()
+    while node is not None:
+        if isinstance(node.tag, str) and node.get("module-title"):
+            return node
+        node = node.getparent()
+    return tree
 
 
 def _has_anchor_ancestor(img, module_div) -> bool:
