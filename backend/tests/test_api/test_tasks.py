@@ -147,6 +147,27 @@ class TestTaskDelete:
     def test_delete_404(self, client):
         assert client.delete("/api/tasks/99999").status_code == 404
 
+    def test_batch_delete(self, client, fake_scheduler):
+        """批量删除：正常删除 + 跳过运行中 + 跳过不存在。"""
+        t1 = _create_task(client)   # pending → 可删
+        t2 = _create_task(client)   # 置为 running → 跳过
+        t3 = _create_task(client)   # pending → 可删
+        client.post(f"/api/tasks/{t2['id']}/start")  # running
+
+        resp = client.post(
+            "/api/tasks/batch-delete",
+            json={"ids": [t1["id"], t2["id"], t3["id"], 99999]},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert set(data["deleted"]) == {t1["id"], t3["id"]}
+        assert data["skipped"] == [
+            {"id": t2["id"], "reason": "running"},
+            {"id": 99999, "reason": "not_found"},
+        ]
+        # t2 仍存在
+        assert client.get(f"/api/tasks/{t2['id']}").status_code == 200
+
 
 class TestTaskControl:
     def test_start(self, client, fake_scheduler):

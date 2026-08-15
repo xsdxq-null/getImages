@@ -58,6 +58,7 @@ getImages/
 | POST | `/api/tasks` | multipart：`file`(txt/csv)、`name`、`rate_limit`(秒/请求,默认 2.0)、`concurrency`(默认 2)。返回 `{id, name, status, total, ...}` |
 | GET | `/api/tasks` | 分页 `?page=1&page_size=20` → `{items:[...], total}`，items 含聚合：`total/succeeded/failed/progress`(0-100) |
 | GET | `/api/tasks/{id}` | 任务详情 + 聚合进度 |
+| POST | `/api/tasks/batch-delete` | body `{ids: [int]}`：批量删除（跳过运行中/不存在），返回 `{deleted, skipped}` |
 | DELETE | `/api/tasks/{id}` | 删除任务：级联删除 products/resources 记录与磁盘文件（downloads/{id}、uploads/task_{id}.txt、logs/task_{id}.log）；运行中（running/paused）返回 409 |
 | POST | `/api/tasks/{id}/start` | pending → running |
 | POST | `/api/tasks/{id}/pause` | running → paused |

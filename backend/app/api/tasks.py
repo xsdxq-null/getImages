@@ -5,6 +5,7 @@ import shutil
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from .. import models
 from ..config import settings
@@ -12,6 +13,28 @@ from ..scheduler import scheduler
 from .download import build_task_zip, require_downloadable
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
+
+
+class TaskIds(BaseModel):
+    """批量删除：要删除的任务 id 列表。"""
+    ids: list[int]
+
+
+def _cleanup_task_files(task_id: int) -> None:
+    """清理任务磁盘文件（下载/上传/日志），容错：缺失/权限问题不阻断。"""
+    paths = [
+        settings.downloads_dir / str(task_id),
+        settings.uploads_dir / f"task_{task_id}.txt",
+        settings.logs_dir / f"task_{task_id}.log",
+    ]
+    for p in paths:
+        try:
+            if p.is_dir():
+                shutil.rmtree(p, ignore_errors=True)
+            elif p.exists():
+                p.unlink(missing_ok=True)
+        except OSError:  # pragma: no cover
+            pass
 
 
 def _require_task(task_id: int) -> dict:
@@ -92,6 +115,25 @@ async def list_tasks(
     return {"items": items, "total": total}
 
 
+@router.post("/batch-delete")
+async def batch_delete_tasks(body: TaskIds):
+    """批量删除任务：跳过运行中/不存在的任务，返回实际删除与跳过列表。"""
+    deleted: list[int] = []
+    skipped: list[dict] = []
+    for tid in body.ids:
+        task = models.get_task(tid)
+        if task is None:
+            skipped.append({"id": tid, "reason": "not_found"})
+            continue
+        if task["status"] in ("running", "paused"):
+            skipped.append({"id": tid, "reason": "running"})
+            continue
+        _cleanup_task_files(tid)
+        models.delete_task(tid)
+        deleted.append(tid)
+    return {"ok": True, "deleted": deleted, "skipped": skipped}
+
+
 @router.get("/{task_id}")
 async def task_detail(task_id: int):
     return _require_task(task_id)
@@ -110,21 +152,7 @@ async def delete_task(task_id: int):
             detail=f"任务状态为 {task['status']}，运行中不可删除，请先取消",
         )
 
-    # 清理磁盘文件（容错：文件缺失/权限问题不阻断）
-    cleanup_paths = [
-        settings.downloads_dir / str(task_id),
-        settings.uploads_dir / f"task_{task_id}.txt",
-        settings.logs_dir / f"task_{task_id}.log",
-    ]
-    for p in cleanup_paths:
-        try:
-            if p.is_dir():
-                shutil.rmtree(p, ignore_errors=True)
-            elif p.exists():
-                p.unlink(missing_ok=True)
-        except OSError:  # pragma: no cover
-            pass
-
+    _cleanup_task_files(task_id)
     removed_resources = models.delete_task(task_id)
     return {
         "ok": True,

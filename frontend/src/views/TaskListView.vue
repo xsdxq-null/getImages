@@ -2,9 +2,20 @@
   <div class="task-list-view">
     <div class="toolbar">
       <h2 class="page-title">任务列表</h2>
-      <router-link to="/tasks/create">
-        <el-button type="primary">＋ 新建任务</el-button>
-      </router-link>
+      <div class="toolbar-actions">
+        <el-button
+          type="danger"
+          plain
+          :disabled="selectedRows.length === 0"
+          :loading="batchDeleting"
+          @click="onBatchDelete"
+        >
+          批量删除（{{ selectedRows.length }}）
+        </el-button>
+        <router-link to="/tasks/create">
+          <el-button type="primary">＋ 新建任务</el-button>
+        </router-link>
+      </div>
     </div>
 
     <el-card shadow="never">
@@ -14,7 +25,9 @@
         row-key="id"
         class="task-table"
         @row-click="goDetail"
+        @selection-change="onSelectionChange"
       >
+        <el-table-column type="selection" width="46" align="center" />
         <el-table-column prop="id" label="ID" width="70" align="center" />
         <el-table-column prop="name" label="任务名称" min-width="200" show-overflow-tooltip />
         <el-table-column prop="total" label="商品总数" width="100" align="center" />
@@ -74,7 +87,7 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { fetchTasks, deleteTask } from '../api'
+import { fetchTasks, deleteTask, batchDeleteTasks } from '../api'
 import { TASK_STATUS_MAP, formatTime, calcSuccessRate } from '../utils'
 
 const router = useRouter()
@@ -85,6 +98,8 @@ const page = ref(1)
 const pageSize = ref(20)
 const loading = ref(false)
 const deletingId = ref(null)
+const selectedRows = ref([])
+const batchDeleting = ref(false)
 
 let timer = null
 
@@ -118,6 +133,47 @@ function onSizeChange(size) {
 
 function goDetail(row) {
   router.push(`/tasks/${row.id}`)
+}
+
+function onSelectionChange(rows) {
+  selectedRows.value = rows || []
+}
+
+/** 批量删除：跳过运行中任务，删除其余并提示结果 */
+async function onBatchDelete() {
+  const ids = selectedRows.value.map((r) => r.id)
+  if (ids.length === 0) return
+  const runningCount = selectedRows.value.filter(
+    (r) => r.status === 'running' || r.status === 'paused'
+  ).length
+  const tip = runningCount
+    ? `\n其中 ${runningCount} 个任务运行中，将被跳过。`
+    : ''
+  try {
+    await ElMessageBox.confirm(
+      `确定删除选中的 ${ids.length} 个任务吗？${tip}\n将同时删除其下载的图片/视频等文件，且不可恢复。`,
+      '批量删除确认',
+      { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' }
+    )
+  } catch {
+    return // 用户取消
+  }
+  batchDeleting.value = true
+  try {
+    const data = await batchDeleteTasks(ids)
+    const n = data.deleted?.length ?? 0
+    const skipped = data.skipped?.length ?? 0
+    if (n > 0) {
+      ElMessage.success(`已删除 ${n} 个任务${skipped ? `，跳过 ${skipped} 个` : ''}`)
+    } else {
+      ElMessage.warning(`没有可删除的任务（${skipped} 个被跳过）`)
+    }
+    await load()
+  } catch (e) {
+    ElMessage.error('批量删除失败，请稍后重试')
+  } finally {
+    batchDeleting.value = false
+  }
 }
 
 /** 删除任务（含关联图片等文件）；运行中任务后端返回 409 拒绝 */
@@ -173,6 +229,12 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 16px;
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .page-title {
