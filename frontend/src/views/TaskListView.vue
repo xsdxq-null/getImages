@@ -131,7 +131,9 @@ function onSizeChange(size) {
   load()
 }
 
-function goDetail(row) {
+function goDetail(row, column) {
+  // 点击复选框列（type=selection）不跳转详情，避免勾选时误跳转
+  if (column && column.type === 'selection') return
   router.push(`/tasks/${row.id}`)
 }
 
