@@ -32,7 +32,8 @@ class MediaSet:
 def extract_media(html: str, page_url: str) -> MediaSet:
     """从详情页 HTML 提取四类媒体资源（主图/主图视频/详情图/详情视频）。
 
-    - 主图/主图视频：``window.detailData`` JSON 中 ``product.mediaItems``；
+    - 主图/主图视频：``window.detailData`` JSON 中 ``product.mediaItems``
+      （兼容新旧两种结构：旧版顶层 ``product``，新版 ``globalData.product``）；
       ``type=="image"`` 取 ``imageUrl.big`` 优先、``normal`` 兜底；
       ``type=="video"`` 取 mp4 视频 URL。
     - 主图补充：``application/ld+json`` 中 ``Product.image``（与 mediaItems 合并去重）。
@@ -48,9 +49,7 @@ def extract_media(html: str, page_url: str) -> MediaSet:
         # detailData 缺失（页面结构变更/被反爬）时，JSON-LD 主图兜底
         return MediaSet(main_images=_extract_ldjson_main_images(html, page_url))
 
-    product = data.get("product") or {}
-    if not isinstance(product, dict):
-        product = {}
+    product = _extract_product(data)
 
     # 标题
     title = None
@@ -179,6 +178,20 @@ def _extract_detail_data(html: str) -> dict | None:
         logger.warning("window.detailData JSON 解析失败: %s", e)
         return None
     return data if isinstance(data, dict) else None
+
+
+def _extract_product(data: dict) -> dict:
+    """从 detailData 取 product 数据，兼容新旧两种页面结构。
+
+    - 旧版：``detailData.product``（顶层 product 对象）；
+    - 新版（2025+ 模块化页面）：``detailData.globalData.product``。
+    """
+    product = data.get("product")
+    if not isinstance(product, dict) or not product:
+        gd = data.get("globalData")
+        if isinstance(gd, dict):
+            product = gd.get("product")
+    return product if isinstance(product, dict) else {}
 
 
 def _extract_image_url(item: dict) -> str | None:

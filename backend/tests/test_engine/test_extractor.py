@@ -51,6 +51,41 @@ class TestExtractMedia:
         assert ms.detail_images == []
         assert ms.detail_videos == []
 
+    def test_globaldata_product_path(self):
+        """新版模块化页面：detailData.globalData.product.mediaItems 提取主图/视频/标题。"""
+        html = """
+        <script>window.detailData = {"globalData": {"product": {
+          "subject": "新版商品标题",
+          "mediaItems": [
+            {"type": "image", "imageUrl": {"big": "https://sc04.alicdn.com/kf/Hone.jpg",
+                                           "normal": "https://sc04.alicdn.com/kf/Hone.jpg_120x120.jpg"}},
+            {"type": "image", "imageUrl": {"normal": "https://sc04.alicdn.com/kf/Htwo.jpg"}},
+            {"type": "video", "videoSource": "https://video.alicdn.com/v/main.mp4"}
+          ]
+        }}};</script>
+        """
+        ms = extract_media(html, SAMPLE_PRODUCT_URL)
+        assert ms.title == "新版商品标题"
+        assert ms.main_images == [
+            "https://sc04.alicdn.com/kf/Hone.jpg",
+            "https://sc04.alicdn.com/kf/Htwo.jpg",
+        ]
+        assert ms.main_videos == ["https://video.alicdn.com/v/main.mp4"]
+
+    def test_globaldata_empty_falls_back_to_legacy(self):
+        """新版 globalData.product 为空时，回退旧版顶层 product（不丢失数据）。"""
+        html = """
+        <script>window.detailData = {
+          "globalData": {"product": {}},
+          "product": {"subject": "旧版标题", "mediaItems": [
+            {"type": "image", "imageUrl": {"big": "https://sc04.alicdn.com/kf/Hlegacy.jpg"}}
+          ]}
+        };</script>
+        """
+        ms = extract_media(html, SAMPLE_PRODUCT_URL)
+        assert ms.title == "旧版标题"
+        assert ms.main_images == ["https://sc04.alicdn.com/kf/Hlegacy.jpg"]
+
     def test_no_detail_data(self):
         ms = extract_media("<html><body>no data</body></html>", SAMPLE_PRODUCT_URL)
         assert ms.title is None

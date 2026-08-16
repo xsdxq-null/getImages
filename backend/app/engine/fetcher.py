@@ -42,13 +42,21 @@ class Fetcher:
     # 公开接口
     # ------------------------------------------------------------------ #
     async def fetch(self, url: str, referer: str | None = None) -> FetchResult:
-        """三层递进抓取页面；L1/L2 返回 None 时降级到下一层。"""
+        """三层递进抓取页面；L1/L2 返回 None 或反爬/登录墙页时降级到下一层。"""
         result = await self._fetch_httpx(url, referer)
-        if result is not None:
+        if result is not None and not _is_intercept_page(result.html):
             return result
+        if result is not None:
+            logger.info(
+                "[httpx] 页面为反爬/登录拦截页（len=%d），降级 curl_cffi", len(result.html)
+            )
         result = await self._fetch_curl_cffi(url, referer)
-        if result is not None:
+        if result is not None and not _is_intercept_page(result.html):
             return result
+        if result is not None:
+            logger.info(
+                "[curl_cffi] 页面为反爬/登录拦截页（len=%d），降级 playwright", len(result.html)
+            )
         # L3：playwright 未安装/浏览器缺失时在此抛 FetcherError
         return await self._fetch_playwright(url, referer)
 
@@ -209,3 +217,30 @@ class Fetcher:
         if self.config.cookie:
             headers["Cookie"] = self.config.cookie
         return headers
+
+
+# WAF 登录墙 / JS 挑战页特征（rgv587_flag、x5sec、登录跳转等）
+_INTERCEPT_MARKERS = (
+    "login.alibaba.com",
+    "icbulogin",
+    "mini_login",
+    "rgv587",
+    "x5sec",
+    '"action": "login"',
+)
+
+
+def _is_intercept_page(html: str) -> bool:
+    """识别 WAF 登录墙 / JS 挑战页（HTTP 200 但无商品数据）。
+
+    - 页面含 ``window.detailData``（真实商品页）→ 直接判定为正常页；
+    - 命中 ≥2 个登录/反爬特征才判定为拦截页（真实页页脚也含登录链接，单特征会误伤）；
+    - desc 接口返回的 JSON（无上述特征）不受影响。
+    """
+    if not html:
+        return True
+    if "window.detailData" in html:
+        return False
+    lowered = html.lower()
+    hits = sum(1 for m in _INTERCEPT_MARKERS if m in lowered)
+    return hits >= 2
