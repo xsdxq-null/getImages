@@ -15,6 +15,15 @@ from .config import BASE_DIR
 FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
 
 
+class NoCacheStaticFiles(StaticFiles):
+    """静态文件禁用缓存（no-cache）：文件变化后浏览器刷新即取新版，避免"改了不生效"。"""
+
+    def file_response(self, *args, **kwargs):
+        resp = super().file_response(*args, **kwargs)
+        resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.init_db()  # 首次启动自动建表（data/ 自动创建）
@@ -46,4 +55,4 @@ async def health():
 
 # 生产模式静态托管 frontend/dist（若存在）；API 路由已优先挂载
 if FRONTEND_DIST.exists() and (FRONTEND_DIST / "index.html").exists():
-    app.mount("/", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="frontend")
+    app.mount("/", NoCacheStaticFiles(directory=str(FRONTEND_DIST), html=True), name="frontend")

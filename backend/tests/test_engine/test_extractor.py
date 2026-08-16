@@ -1,6 +1,13 @@
 """extractor.py 单元测试：detailData 提取、big/normal 优先级、描述 HTML 解析、urljoin。"""
+import json
+
 from app.engine.extractor import extract_media, extract_media_from_description
-from tests.test_engine.samples import SAMPLE_HTML, SAMPLE_PRODUCT_URL
+from tests.test_engine.samples import (
+    SAMPLE_HTML,
+    SAMPLE_LDJSON_HTML,
+    SAMPLE_LDJSON_IMAGES,
+    SAMPLE_PRODUCT_URL,
+)
 
 
 class TestExtractMedia:
@@ -108,3 +115,66 @@ class TestExtractMedia:
             "https://sc04.alicdn.com/kf/Hnormal1.jpg",
             "https://sc04.alicdn.com/kf/Hnormal2.jpg",
         ]
+
+
+class TestExtractMediaJsonLd:
+    """JSON-LD（application/ld+json 中 schema.org Product.image）主图提取。"""
+
+    def test_main_images_from_ldjson(self):
+        """无 detailData 时，JSON-LD Product.image 数组作为主图来源。"""
+        ms = extract_media(SAMPLE_LDJSON_HTML, SAMPLE_PRODUCT_URL)
+        assert ms.main_images == SAMPLE_LDJSON_IMAGES
+
+    def test_merge_with_media_items_dedupe(self):
+        """detailData mediaItems 与 JSON-LD 主图合并去重：mediaItems 优先、JSON-LD 补充。"""
+        html = """
+        <script>window.detailData = {"product": {"mediaItems": [
+          {"type": "image", "imageUrl": {"big": "%s"}},
+          {"type": "image", "imageUrl": {"normal": "https://cdn.example.com/extra.jpg"}}
+        ]}};</script>
+        <script type="application/ld+json">%s</script>
+        """ % (
+            SAMPLE_LDJSON_IMAGES[0],
+            '{"@type": "Product", "image": ' + json.dumps(SAMPLE_LDJSON_IMAGES) + "}",
+        )
+        ms = extract_media(html, SAMPLE_PRODUCT_URL)
+        # mediaItems 2 张在前 + JSON-LD 6 张中仅去重掉重复的 1 张 → 共 7 张
+        assert ms.main_images == [
+            SAMPLE_LDJSON_IMAGES[0],
+            "https://cdn.example.com/extra.jpg",
+            *SAMPLE_LDJSON_IMAGES[1:],
+        ]
+
+    def test_type_as_list(self):
+        """@type 为列表（["Product", "Thing"]）时同样识别为商品节点。"""
+        html = """
+        <script type="application/ld+json">{"@type": ["Product", "Thing"],
+          "image": ["https://sc04.alicdn.com/kf/Hone.jpg", "https://sc04.alicdn.com/kf/Htwo.jpg"]}</script>
+        """
+        ms = extract_media(html, SAMPLE_PRODUCT_URL)
+        assert ms.main_images == [
+            "https://sc04.alicdn.com/kf/Hone.jpg",
+            "https://sc04.alicdn.com/kf/Htwo.jpg",
+        ]
+
+    def test_image_as_string(self):
+        """image 字段为单字符串（单图）时正常提取。"""
+        html = """
+        <script type="application/ld+json">{"@type": "Product", "image": "//sc04.alicdn.com/kf/Hsingle.jpg"}</script>
+        """
+        ms = extract_media(html, SAMPLE_PRODUCT_URL)
+        assert ms.main_images == ["https://sc04.alicdn.com/kf/Hsingle.jpg"]
+
+    def test_no_product_node(self):
+        """页面仅含非 Product 类型（如 BreadcrumbList）时，主图为空且不报错。"""
+        html = """
+        <script type="application/ld+json">[{"@type": "BreadcrumbList", "itemListElement": []}]</script>
+        """
+        ms = extract_media(html, SAMPLE_PRODUCT_URL)
+        assert ms.main_images == []
+
+    def test_invalid_json_ignored(self):
+        """ld+json 内容非法时不抛异常，主图结果不受影响。"""
+        html = '<script type="application/ld+json">not json{{{</script>'
+        ms = extract_media(html, SAMPLE_PRODUCT_URL)
+        assert ms.main_images == []

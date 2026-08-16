@@ -13,9 +13,7 @@
           批量删除（{{ selectedRows.length }}）
         </el-button>
         <el-button :loading="loading" @click="load">↻ 刷新</el-button>
-        <router-link to="/tasks/create">
-          <el-button type="primary">＋ 新建任务</el-button>
-        </router-link>
+        <el-button type="primary" @click="router.push('/tasks/create')">＋ 新建任务</el-button>
       </div>
     </div>
 

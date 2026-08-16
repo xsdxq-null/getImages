@@ -1,4 +1,4 @@
-"""页面媒体提取：detailData JSON + productHtmlDescription 描述 HTML。
+"""页面媒体提取：detailData JSON + JSON-LD 主图 + productHtmlDescription 描述 HTML。
 
 CONTRACT.md 第 4.4 节。
 """
@@ -35,6 +35,7 @@ def extract_media(html: str, page_url: str) -> MediaSet:
     - 主图/主图视频：``window.detailData`` JSON 中 ``product.mediaItems``；
       ``type=="image"`` 取 ``imageUrl.big`` 优先、``normal`` 兜底；
       ``type=="video"`` 取 mp4 视频 URL。
+    - 主图补充：``application/ld+json`` 中 ``Product.image``（与 mediaItems 合并去重）。
     - 详情图/详情视频：``productHtmlDescription``（lxml 解析）中
       ``<img>`` / ``<video>`` / ``<source>`` / 内嵌 mp4 链接。
     - 相对 URL 一律用 ``page_url`` 补齐（urljoin）。
@@ -44,7 +45,8 @@ def extract_media(html: str, page_url: str) -> MediaSet:
 
     data = _extract_detail_data(html)
     if data is None:
-        return MediaSet()
+        # detailData 缺失（页面结构变更/被反爬）时，JSON-LD 主图兜底
+        return MediaSet(main_images=_extract_ldjson_main_images(html, page_url))
 
     product = data.get("product") or {}
     if not isinstance(product, dict):
@@ -83,7 +85,7 @@ def extract_media(html: str, page_url: str) -> MediaSet:
 
     return MediaSet(
         title=title,
-        main_images=_dedupe(main_images),
+        main_images=_dedupe(main_images + _extract_ldjson_main_images(html, page_url)),
         main_videos=_dedupe(main_videos),
         detail_images=_dedupe(detail_images),
         detail_videos=_dedupe(detail_videos),
@@ -93,6 +95,48 @@ def extract_media(html: str, page_url: str) -> MediaSet:
 # ---------------------------------------------------------------------- #
 # detailData JSON
 # ---------------------------------------------------------------------- #
+# ---------------------------------------------------------------------- #
+# JSON-LD 主图（application/ld+json 中 schema.org Product.image）
+# ---------------------------------------------------------------------- #
+def _extract_ldjson_main_images(html: str, page_url: str) -> list[str]:
+    """从页面 JSON-LD 提取主图（schema.org ``Product.image``）。
+
+    - 解析全部 ``<script type="application/ld+json">`` 块（顶层为对象或数组）；
+    - 定位 ``@type`` 含 ``Product`` 的节点（兼容字符串 / 列表写法）；
+    - 取 ``image`` 字段（字符串单图或数组多图），urljoin 补齐并去重；
+    - 无 Product 节点 / JSON 解析失败时静默返回空列表（不干扰现有主图结果）。
+    """
+    try:
+        tree = lxml.html.fromstring(html)
+    except Exception:
+        return []
+    images: list[str] = []
+    for script in tree.xpath('//script[@type="application/ld+json"]'):
+        text = (script.text or "").strip()
+        if not text:
+            continue
+        try:
+            data = json.loads(text)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        nodes = data if isinstance(data, list) else [data]
+        for node in nodes:
+            if not isinstance(node, dict) or not _ldjson_has_type(node.get("@type"), "Product"):
+                continue
+            image = node.get("image")
+            urls = image if isinstance(image, list) else ([image] if image else [])
+            for u in urls:
+                if isinstance(u, str) and _is_usable_url(u):
+                    images.append(urljoin(page_url, u.strip()))
+    return _dedupe(images)
+
+
+def _ldjson_has_type(raw, target: str) -> bool:
+    """JSON-LD 节点的 @type 是否包含指定类型（兼容字符串 / 列表）。"""
+    types = raw if isinstance(raw, list) else [raw]
+    return any(isinstance(t, str) and t.strip().lower() == target.lower() for t in types)
+
+
 def _extract_detail_data(html: str) -> dict | None:
     """定位 window.detailData 的 JSON 对象并做括号配平，避免非贪婪截断。"""
     m = _DETAIL_DATA_RE.search(html)

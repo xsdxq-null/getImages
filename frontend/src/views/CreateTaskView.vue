@@ -130,12 +130,17 @@
               <el-button
                 type="primary"
                 :loading="submitting"
-                :disabled="!currentFile || !parseResult || parseResult.total <= 0"
+                :disabled="!canSubmit"
                 @click="submit"
               >
                 创建并运行任务
               </el-button>
-              <span v-if="!currentFile" class="form-tip">请先上传文件</span>
+              <span v-if="!canSubmit" class="form-tip">
+                {{ inputMode === 'file' ? '请先上传 URL 列表文件' : '请先输入至少一个商品 URL' }}
+              </span>
+              <span v-else-if="inputMode === 'input'" class="form-tip">
+                已添加 {{ urlTags.length }} 个商品 URL，创建时自动去重并校验
+              </span>
             </el-form-item>
           </el-form>
         </el-card>
@@ -228,6 +233,14 @@ const parseAlertTitle = computed(() => {
     return `未解析到有效商品链接${invalid.length ? `（${invalid.length} 条被剔除）` : ''}，无法创建任务`
   }
   return `解析成功：共 ${total} 件有效商品${invalid.length ? `，剔除 ${invalid.length} 条非法/重复链接` : ''}`
+})
+
+/** 提交按钮可用性：文件模式需已上传且解析出有效 URL；手动输入模式需已添加至少一个 URL 标签 */
+const canSubmit = computed(() => {
+  if (inputMode.value === 'file') {
+    return !!currentFile.value && !!parseResult.value && parseResult.value.total > 0
+  }
+  return urlTags.value.length > 0
 })
 
 function onExceed() {
