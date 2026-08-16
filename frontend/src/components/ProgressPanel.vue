@@ -1,5 +1,5 @@
 <template>
-  <el-card shadow="never" class="progress-panel">
+  <el-card shadow="always" class="progress-panel">
     <div class="progress-main">
       <div class="progress-left">
         <el-progress

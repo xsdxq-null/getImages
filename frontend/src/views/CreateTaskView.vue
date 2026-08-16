@@ -7,7 +7,7 @@
 
     <el-row :gutter="16">
       <el-col :xs="24" :md="14">
-        <el-card shadow="never">
+        <el-card shadow="always">
           <template #header>
             <span>① 添加 URL 列表（上传文件 或 直接输入）</span>
           </template>
@@ -86,7 +86,7 @@
       </el-col>
 
       <el-col :xs="24" :md="10">
-        <el-card shadow="never">
+        <el-card shadow="always">
           <template #header>
             <span>② 任务参数</span>
           </template>
@@ -163,30 +163,45 @@ const urlTags = ref([])
 const tagInput = ref('')
 let tagKeySeq = 0
 
-/** 回车/输入添加标签：按行拆分（含粘贴换行），每项独立 key，可重复添加 */
+/** 回车/粘贴添加标签：拆行、校验合法链接、判断重复（已存在则不重复添加），统计并提示 */
 function addTagsFromInput() {
   const text = String(tagInput.value || '').trim()
   if (!text) return
+  const existing = new Set(urlTags.value.map((t) => t.value))
+  let added = 0
+  let dup = 0
+  let invalid = 0
   for (const line of text.split(/\r?\n/)) {
     const u = line.trim()
     if (!u) continue
+    if (!isValidUrl(u)) {
+      invalid++
+      continue
+    }
+    if (existing.has(u)) {
+      dup++
+      continue
+    }
     urlTags.value.push({ key: ++tagKeySeq, value: u })
+    existing.add(u)
+    added++
   }
   tagInput.value = ''
+  if (invalid > 0) {
+    ElMessage.warning(`已剔除 ${invalid} 条非法链接（需 http(s) 且含商品 ID）`)
+  }
+  if (dup > 0) {
+    ElMessage.info(`${dup} 条链接已存在，未重复添加`)
+  }
+  if (added === 0 && invalid === 0 && dup === 0 && text) {
+    ElMessage.warning('请输入合法的商品详情页链接')
+  }
 }
 
-/** 粘贴多行：等粘贴完成后统一解析 */
-function onTagPaste(e) {
-  // 延迟到剪贴板内容进入输入框后处理
+/** 粘贴多行：等粘贴内容进入输入框后统一走 addTagsFromInput（校验/判重） */
+function onTagPaste() {
   setTimeout(() => {
-    const lines = String(tagInput.value || '').split(/\r?\n/)
-    if (lines.length > 1) {
-      for (const line of lines) {
-        const u = line.trim()
-        if (u) urlTags.value.push({ key: ++tagKeySeq, value: u })
-      }
-      tagInput.value = ''
-    }
+    if (String(tagInput.value || '').trim()) addTagsFromInput()
   }, 0)
 }
 
@@ -372,6 +387,15 @@ function autoName() {
 .create-task-view {
   max-width: 1100px;
   margin: 0 auto;
+}
+
+/* 两卡片间距：窄屏竖排时相邻卡片留白 */
+.create-task-view .el-row .el-col {
+  margin-bottom: 16px;
+}
+
+.create-task-view .el-row .el-col:last-child {
+  margin-bottom: 0;
 }
 
 .page-header {

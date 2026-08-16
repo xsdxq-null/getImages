@@ -1,5 +1,5 @@
 <template>
-  <div v-loading="pageLoading" class="task-detail-view">
+  <div v-loading="pageLoading" class="task-detail-view card-gap">
     <template v-if="task">
       <div class="page-header">
         <el-button link @click="$router.push('/')">← 返回列表</el-button>
@@ -23,7 +23,7 @@
       <ProgressPanel :task="task" />
 
       <!-- 操作区 -->
-      <el-card shadow="never" class="action-card">
+      <el-card shadow="always" class="action-card">
         <template #header><span>任务操作</span></template>
         <div class="action-bar">
           <template v-if="task.status === 'pending'">
@@ -57,7 +57,7 @@
       </el-card>
 
       <!-- 商品列表 -->
-      <el-card shadow="never" class="products-card">
+      <el-card shadow="always" class="products-card">
         <template #header>
           <div class="card-header-row">
             <span>商品列表（{{ productsTotal }}）</span>
@@ -153,7 +153,7 @@
       </el-card>
 
       <!-- 日志流（SSE） -->
-      <el-card shadow="never" class="log-card">
+      <el-card shadow="always" class="log-card">
         <template #header><span>实时日志</span></template>
         <LogStream :task-id="Number(taskId)" />
       </el-card>
@@ -450,7 +450,7 @@ onBeforeUnmount(() => {
 .action-card,
 .products-card,
 .log-card {
-  margin-bottom: 16px;
+  margin-bottom: 0;
 }
 
 .action-bar {

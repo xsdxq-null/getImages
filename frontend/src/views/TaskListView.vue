@@ -18,7 +18,7 @@
       </div>
     </div>
 
-    <el-card shadow="never">
+    <el-card shadow="always">
       <el-table
         v-loading="loading"
         :data="tasks"

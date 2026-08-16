@@ -74,4 +74,9 @@ body {
   padding: 20px;
   overflow-y: auto;
 }
+
+/* 卡片堆叠间距工具类：多个卡片垂直堆叠的容器加上此 class */
+.card-gap .el-card + .el-card {
+  margin-top: 16px;
+}
 </style>
