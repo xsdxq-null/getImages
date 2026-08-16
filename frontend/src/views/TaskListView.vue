@@ -12,6 +12,7 @@
         >
           批量删除（{{ selectedRows.length }}）
         </el-button>
+        <el-button :loading="loading" @click="load">↻ 刷新</el-button>
         <router-link to="/tasks/create">
           <el-button type="primary">＋ 新建任务</el-button>
         </router-link>
@@ -109,10 +110,35 @@ async function load() {
     const data = await fetchTasks(page.value, pageSize.value)
     tasks.value = data.items || []
     total.value = data.total ?? 0
+    // 自动刷新：仅当存在运行中/暂停的任务时才继续轮询，否则停止（无意义请求不再发生）
+    const hasActive = tasks.value.some(
+      (t) => t.status === 'running' || t.status === 'paused'
+    )
+    if (hasActive) {
+      scheduleNextRefresh()
+    } else {
+      clearRefreshTimer()
+    }
   } catch (e) {
-    /* 错误已由 axios 拦截器提示 */
+    /* 加载失败：停止轮询，交由手动刷新 */
+    clearRefreshTimer()
   } finally {
     loading.value = false
+  }
+}
+
+/** 10 秒后再次刷新（setTimeout 链，天然串行不重叠） */
+function scheduleNextRefresh() {
+  clearRefreshTimer()
+  timer = setTimeout(() => {
+    if (!loading.value) load()
+  }, 10000)
+}
+
+function clearRefreshTimer() {
+  if (timer) {
+    clearTimeout(timer)
+    timer = null
   }
 }
 
@@ -210,13 +236,12 @@ async function onDelete(row) {
 }
 
 onMounted(() => {
+  // load() 内部根据是否存在运行中任务决定是否进入 10s 自动轮询
   load()
-  // 列表页轻量刷新，保证状态展示较新
-  timer = setInterval(load, 10000)
 })
 
 onBeforeUnmount(() => {
-  if (timer) clearInterval(timer)
+  clearRefreshTimer()
 })
 </script>
 
