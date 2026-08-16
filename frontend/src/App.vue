@@ -7,14 +7,6 @@
           <span class="brand-title">阿里国际站素材抓取</span>
         </router-link>
       </div>
-      <div class="app-nav">
-        <router-link to="/">
-          <el-button link type="primary">任务列表</el-button>
-        </router-link>
-        <router-link to="/tasks/create">
-          <el-button type="primary" size="small">＋ 新建任务</el-button>
-        </router-link>
-      </div>
     </el-header>
     <el-main class="app-main">
       <router-view />
@@ -76,12 +68,6 @@ body {
   font-size: 18px;
   font-weight: 600;
   color: #303133;
-}
-
-.app-nav {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
 }
 
 .app-main {
