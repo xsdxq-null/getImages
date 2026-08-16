@@ -9,10 +9,16 @@
       <el-col :xs="24" :md="14">
         <el-card shadow="never">
           <template #header>
-            <span>① 上传 URL 列表（txt / csv）</span>
+            <span>① 添加 URL 列表（上传文件 或 直接输入）</span>
           </template>
 
+          <el-radio-group v-model="inputMode" class="input-mode">
+            <el-radio-button value="file">上传文件</el-radio-button>
+            <el-radio-button value="input">手动输入</el-radio-button>
+          </el-radio-group>
+
           <el-upload
+            v-if="inputMode === 'file'"
             drag
             :auto-upload="false"
             :limit="1"
@@ -31,6 +37,24 @@
               </div>
             </template>
           </el-upload>
+
+          <!-- 手动输入：标签组件（输入 URL 回车生成标签，可移除） -->
+          <div v-else class="input-tags">
+            <el-select
+              v-model="urlTags"
+              multiple
+              filterable
+              allow-create
+              default-first-option
+              :reserve-keyword="false"
+              placeholder="输入商品详情页 URL 后按回车添加，可粘贴多行"
+              class="url-tags"
+              no-data-text="输入 URL 后按回车添加"
+            />
+            <div class="input-tip">
+              可粘贴多行 URL（每行一个），回车生成标签；系统创建任务时自动去重并剔除非法链接。
+            </div>
+          </div>
 
           <!-- 解析结果 -->
           <div v-if="parseResult" class="parse-result">
@@ -125,6 +149,8 @@ const currentFile = ref(null)
 const parseResult = ref(null)
 const parseLoading = ref(false)
 const submitting = ref(false)
+const inputMode = ref('file')
+const urlTags = ref([])
 
 const form = ref({
   name: '',
@@ -260,14 +286,24 @@ function isValidUrl(u) {
 }
 
 async function submit() {
-  if (!currentFile.value) {
-    ElMessage.warning('请先上传 URL 列表文件')
+  let file = currentFile.value
+  if (!file && inputMode.value === 'input') {
+    // 手动输入：把标签列表组装成 txt 文件（后端统一解析/去重/校验）
+    const lines = (urlTags.value || []).map((u) => String(u).trim()).filter(Boolean)
+    if (lines.length === 0) {
+      ElMessage.warning('请先输入至少一个商品 URL')
+      return
+    }
+    file = new File([lines.join('\n')], 'urls_input.txt', { type: 'text/plain' })
+  }
+  if (!file) {
+    ElMessage.warning('请先上传 URL 列表文件或输入商品 URL')
     return
   }
   submitting.value = true
   try {
     const formData = new FormData()
-    formData.append('file', currentFile.value)
+    formData.append('file', file)
     formData.append('name', form.value.name || autoName())
     formData.append('rate_limit', String(form.value.rate_limit))
     formData.append('concurrency', String(form.value.concurrency))
@@ -310,6 +346,25 @@ function autoName() {
 
 .upload-box :deep(.el-upload-dragger) {
   padding: 30px 20px;
+}
+
+.input-mode {
+  margin-bottom: 14px;
+}
+
+.input-tags {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.url-tags {
+  width: 100%;
+}
+
+.input-tip {
+  font-size: 12px;
+  color: #909399;
 }
 
 .parse-result {
