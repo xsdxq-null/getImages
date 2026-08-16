@@ -26,8 +26,8 @@ export const RESOURCE_KINDS = [
   { key: 'detail_video', label: '详情视频' }
 ]
 
-/** 任务是否处于运行/暂停等"未终态"（需要轮询） */
-export const TASK_ACTIVE_STATUSES = ['pending', 'running', 'paused']
+/** 任务处于运行/暂停等"未终态"（需要轮询；待开始的任务商品列表静态，无需自动刷新） */
+export const TASK_ACTIVE_STATUSES = ['running', 'paused']
 
 /** 任务是否已进入终态 */
 export function isTaskFinal(status) {
