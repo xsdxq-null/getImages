@@ -38,21 +38,30 @@
             </template>
           </el-upload>
 
-          <!-- 手动输入：标签组件（输入 URL 回车生成标签，可移除） -->
+          <!-- 手动输入：el-input + el-tag 标签（回车添加、粘贴多行、可单独删除重复项） -->
           <div v-else class="input-tags">
-            <el-select
-              v-model="urlTags"
-              multiple
-              filterable
-              allow-create
-              default-first-option
-              :reserve-keyword="false"
-              placeholder="输入商品详情页 URL 后按回车添加，可粘贴多行"
-              class="url-tags"
-              no-data-text="输入 URL 后按回车添加"
+            <el-input
+              v-model="tagInput"
+              placeholder="输入商品详情页 URL 后按回车添加，支持粘贴多行"
+              clearable
+              class="tag-input"
+              @keyup.enter="addTagsFromInput"
+              @paste="onTagPaste"
             />
+            <div v-if="urlTags.length" class="tag-list">
+              <el-tag
+                v-for="t in urlTags"
+                :key="t.key"
+                closable
+                type="info"
+                class="url-tag"
+                @close="removeTag(t.key)"
+              >
+                {{ t.value }}
+              </el-tag>
+            </div>
             <div class="input-tip">
-              可粘贴多行 URL（每行一个），回车生成标签；系统创建任务时自动去重并剔除非法链接。
+              回车生成标签，可粘贴多行（每行一个）；重复 URL 可分别添加、单独删除；创建任务时自动去重并剔除非法链接。
             </div>
           </div>
 
@@ -149,8 +158,42 @@ const currentFile = ref(null)
 const parseResult = ref(null)
 const parseLoading = ref(false)
 const submitting = ref(false)
-const inputMode = ref('file')
+const inputMode = ref('input')
 const urlTags = ref([])
+const tagInput = ref('')
+let tagKeySeq = 0
+
+/** 回车/输入添加标签：按行拆分（含粘贴换行），每项独立 key，可重复添加 */
+function addTagsFromInput() {
+  const text = String(tagInput.value || '').trim()
+  if (!text) return
+  for (const line of text.split(/\r?\n/)) {
+    const u = line.trim()
+    if (!u) continue
+    urlTags.value.push({ key: ++tagKeySeq, value: u })
+  }
+  tagInput.value = ''
+}
+
+/** 粘贴多行：等粘贴完成后统一解析 */
+function onTagPaste(e) {
+  // 延迟到剪贴板内容进入输入框后处理
+  setTimeout(() => {
+    const lines = String(tagInput.value || '').split(/\r?\n/)
+    if (lines.length > 1) {
+      for (const line of lines) {
+        const u = line.trim()
+        if (u) urlTags.value.push({ key: ++tagKeySeq, value: u })
+      }
+      tagInput.value = ''
+    }
+  }, 0)
+}
+
+/** 删除单个标签（按唯一 key，重复项可单独删） */
+function removeTag(key) {
+  urlTags.value = urlTags.value.filter((t) => t.key !== key)
+}
 
 const form = ref({
   name: '',
@@ -289,7 +332,7 @@ async function submit() {
   let file = currentFile.value
   if (!file && inputMode.value === 'input') {
     // 手动输入：把标签列表组装成 txt 文件（后端统一解析/去重/校验）
-    const lines = (urlTags.value || []).map((u) => String(u).trim()).filter(Boolean)
+    const lines = (urlTags.value || []).map((t) => String(t.value || '').trim()).filter(Boolean)
     if (lines.length === 0) {
       ElMessage.warning('请先输入至少一个商品 URL')
       return
@@ -358,8 +401,26 @@ function autoName() {
   gap: 8px;
 }
 
-.url-tags {
+.tag-input {
   width: 100%;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.url-tag {
+  max-width: 100%;
+}
+
+.url-tag :deep(.el-tag__content) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .input-tip {
