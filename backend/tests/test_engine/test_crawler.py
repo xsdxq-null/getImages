@@ -83,6 +83,50 @@ class TestCrawlProduct:
         manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
         assert manifest["status"] == "failed"
 
+    def test_fetch_error_desc_fallback_rescues_detail_images(self, tmp_path, monkeypatch):
+        """fetch 抛 FetcherError（如 L3 浏览器缺失）但 desc 接口可用 → 详情图部分成功，不再整体失败。"""
+        monkeypatch.setattr("app.engine.crawler.download_media", _fake_download_ok)
+        desc_html = (
+            '<DIV id="detail_decorate_root">'
+            '<img src="//sc04.alicdn.com/kf/Habc123.jpg" />'
+            '<img data-src="https://sc04.alicdn.com/kf/Hdef456.jpg" />'
+            "</DIV>"
+        )
+        desc_payload = json.dumps({"data": {"productHtmlDescription": desc_html}})
+
+        class BadFetcherWithDesc(FakeFetcher):
+            async def fetch(self, url, referer=None):
+                if "mainAction/desc.htm" in url:
+                    return FetchResult(200, desc_payload, url, "httpx")
+                raise FetcherError("playwright 浏览器未安装，无法使用 L3")
+
+        result = _run(crawl_product(BadFetcherWithDesc(), VALID_URL, tmp_path))
+        assert result.success is True, result.error
+        assert len(result.resources) == 2  # 仅详情图
+        assert all(r["kind"] == "detail_image" for r in result.resources)
+        assert all(r["status"] == "done" for r in result.resources)
+        manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+        assert manifest["status"] == "done"
+        assert manifest["detail_images"] == ["detail_001.jpg", "detail_002.jpg"]
+        assert manifest["main_images"] == []  # 主图缺失，如实留空
+
+    def test_fetch_http_error_desc_fallback_rescues_detail_images(self, tmp_path, monkeypatch):
+        """fetch 返回 403/空响应 + desc 接口可用 → 详情图部分成功。"""
+        monkeypatch.setattr("app.engine.crawler.download_media", _fake_download_ok)
+        desc_html = '<DIV id="detail_decorate_root"><img data-src="https://sc04.alicdn.com/kf/Honly.jpg" /></DIV>'
+        desc_payload = json.dumps({"data": {"productHtmlDescription": desc_html}})
+
+        class HttpErrorFetcher(FakeFetcher):
+            async def fetch(self, url, referer=None):
+                if "mainAction/desc.htm" in url:
+                    return FetchResult(200, desc_payload, url, "httpx")
+                return FetchResult(403, "", url, "httpx")
+
+        result = _run(crawl_product(HttpErrorFetcher(), VALID_URL, tmp_path))
+        assert result.success is True, result.error
+        assert len(result.resources) == 1
+        assert result.resources[0]["kind"] == "detail_image"
+
     def test_http_error(self, tmp_path, monkeypatch):
         result = _run(crawl_product(FakeFetcher(html="", status=403), VALID_URL, tmp_path))
         assert result.success is False

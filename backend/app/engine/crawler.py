@@ -67,80 +67,96 @@ async def crawl_product(
         )
 
     # ---- 1. 获取页面 ----
+    page_url = url
+    page_error: str | None = None
     try:
         result = await fetcher.fetch(url, referer=referer)
+        if result.status_code >= 400 or not result.html:
+            page_error = (
+                f"页面获取失败 HTTP {result.status_code}（strategy={result.strategy}）"
+            )
+        else:
+            page_url = result.final_url or url
     except FetcherError as e:
         logger.error("[%s] 页面获取失败: %s", pid, e)
-        _write_manifest(dest_dir, pid, url, None, [], "failed", error=str(e))
-        return CrawlResult(product_id=pid, title=None, success=False, error=str(e))
-
-    if result.status_code >= 400 or not result.html:
-        msg = f"页面获取失败 HTTP {result.status_code}（strategy={result.strategy}）"
-        logger.error("[%s] %s", pid, msg)
-        _write_manifest(dest_dir, pid, url, None, [], "failed", error=msg)
-        return CrawlResult(product_id=pid, title=None, success=False, error=msg)
+        page_error = str(e)
 
     # ---- 2. 提取媒体 ----
-    page_url = result.final_url or url
-    media: MediaSet = extract_media(result.html, page_url)
-    logger.info(
-        "[%s] 提取完成: 主图%d 主视%d 详情图%d 详情视%d",
-        pid,
-        len(media.main_images), len(media.main_videos),
-        len(media.detail_images), len(media.detail_videos),
-    )
+    if page_error is None:
+        media: MediaSet = extract_media(result.html, page_url)
+        logger.info(
+            "[%s] 提取完成: 主图%d 主视%d 详情图%d 详情视%d",
+            pid,
+            len(media.main_images), len(media.main_videos),
+            len(media.detail_images), len(media.detail_videos),
+        )
 
-    # ---- 2.0 详情图 desc API 兜底：页面四类资源全空（登录墙/反爬拦截）时，
-    # 尝试免登录的 desc 接口获取 productHtmlDescription 提取详情图 ----
-    if (
-        not media.main_images
-        and not media.main_videos
-        and not media.detail_images
-        and not media.detail_videos
-    ):
-        detail_html = await _fetch_description_api(fetcher, pid)
-        if detail_html:
-            d_images, d_videos = extract_media_from_description(detail_html, page_url)
+        # ---- 2.0 详情图 desc API 兜底：页面四类资源全空（登录墙/反爬拦截）时，
+        # 尝试免登录的 desc 接口获取 productHtmlDescription 提取详情图 ----
+        if (
+            not media.main_images
+            and not media.main_videos
+            and not media.detail_images
+            and not media.detail_videos
+        ):
+            d_images, d_videos = await _fetch_desc_fallback(fetcher, pid, page_url)
             media.detail_images = d_images
             media.detail_videos = d_videos
-            logger.info(
-                "[%s] desc API 兜底: 详情图%d 详情视%d",
-                pid, len(d_images), len(d_videos),
-            )
+            if d_images or d_videos:
+                logger.info(
+                    "[%s] desc API 兜底: 详情图%d 详情视%d",
+                    pid, len(d_images), len(d_videos),
+                )
 
-    # ---- 2.1 内容级检测：四类资源全空 → 视为异常（反爬跳转页 / 媒体不可提取）----
-    if (
-        not media.main_images
-        and not media.main_videos
-        and not media.detail_images
-        and not media.detail_videos
-    ):
-        if media.title is None:
-            if _is_login_wall(result.html):
-                msg = (
-                    f"页面要求登录（登录墙/地区限制），未提取到商品数据，"
-                    f"请先运行 python -m app.engine.login 登录后重启后端重试"
-                    f"（strategy={result.strategy}）"
-                )
-            elif _is_anti_bot_page(result.html):
-                msg = (
-                    f"被目标站反爬验证拦截（x5sec/滑块验证），页面无可提取数据，"
-                    f"可能需要有效登录态或更换网络/降低频率"
-                    f"（strategy={result.strategy}）"
-                )
+        # ---- 2.1 内容级检测：四类资源全空 → 视为异常（反爬跳转页 / 媒体不可提取）----
+        if (
+            not media.main_images
+            and not media.main_videos
+            and not media.detail_images
+            and not media.detail_videos
+        ):
+            if media.title is None:
+                if _is_login_wall(result.html):
+                    msg = (
+                        f"页面要求登录（登录墙/地区限制），未提取到商品数据，"
+                        f"请先运行 python -m app.engine.login 登录后重启后端重试"
+                        f"（strategy={result.strategy}）"
+                    )
+                elif _is_anti_bot_page(result.html):
+                    msg = (
+                        f"被目标站反爬验证拦截（x5sec/滑块验证），页面无可提取数据，"
+                        f"可能需要有效登录态或更换网络/降低频率"
+                        f"（strategy={result.strategy}）"
+                    )
+                else:
+                    msg = (
+                        f"页面未提取到商品数据（标题与四类资源均为空），"
+                        f"可能被反爬拦截或页面结构变更（strategy={result.strategy}）"
+                    )
             else:
                 msg = (
-                    f"页面未提取到商品数据（标题与四类资源均为空），"
-                    f"可能被反爬拦截或页面结构变更（strategy={result.strategy}）"
+                    f"页面可访问但未提取到任何媒体资源（标题: {media.title[:50]}），"
+                    f"可能媒体被反爬隐藏或结构变更（strategy={result.strategy}）"
                 )
-        else:
-            msg = (
-                f"页面可访问但未提取到任何媒体资源（标题: {media.title[:50]}），"
-                f"可能媒体被反爬隐藏或结构变更（strategy={result.strategy}）"
+            logger.warning("[%s] %s", pid, msg)
+            _write_manifest(dest_dir, pid, url, media.title, [], "failed", error=msg)
+            return CrawlResult(product_id=pid, title=media.title, success=False, error=msg)
+    else:
+        # ---- 2.2 页面获取失败（FetcherError / HTTP 错误 / 空响应）→
+        # 尝试 desc API 详情图兜底（免登录），能拿到详情图则部分成功 ----
+        media = MediaSet()
+        d_images, d_videos = await _fetch_desc_fallback(fetcher, pid, page_url)
+        media.detail_images = d_images
+        media.detail_videos = d_videos
+        if d_images or d_videos:
+            logger.warning(
+                "[%s] %s，desc 接口兜底详情图%d 详情视%d（主图缺失）",
+                pid, page_error, len(d_images), len(d_videos),
             )
-        logger.warning("[%s] %s", pid, msg)
-        _write_manifest(dest_dir, pid, url, media.title, [], "failed", error=msg)
-        return CrawlResult(product_id=pid, title=media.title, success=False, error=msg)
+        else:
+            logger.error("[%s] %s", pid, page_error)
+            _write_manifest(dest_dir, pid, url, None, [], "failed", error=page_error)
+            return CrawlResult(product_id=pid, title=None, success=False, error=page_error)
 
     # ---- 3. 逐资源下载（单资源失败不中断） ----
     resources: list[dict] = []
@@ -244,6 +260,20 @@ async def _fetch_description_api(
         return None
     desc = (data.get("data") or {}).get("productHtmlDescription")
     return desc if isinstance(desc, str) and desc.strip() else None
+
+
+async def _fetch_desc_fallback(
+    fetcher: Fetcher, product_id: str, page_url: str
+) -> tuple[list[str], list[str]]:
+    """desc API 详情图/视频兜底（免登录）：返回 (images, videos)；接口失败返回空。
+
+    供两类场景复用：① 页面四类资源全空（登录墙/反爬拦截）；
+    ② 页面获取本身失败（FetcherError / HTTP 错误）时，详情图仍可独立拿到。
+    """
+    detail_html = await _fetch_description_api(fetcher, product_id)
+    if not detail_html:
+        return [], []
+    return extract_media_from_description(detail_html, page_url)
 
 
 def _write_manifest(
