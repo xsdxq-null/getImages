@@ -86,6 +86,48 @@ class TestExtractMedia:
         assert ms.title == "旧版标题"
         assert ms.main_images == ["https://sc04.alicdn.com/kf/Hlegacy.jpg"]
 
+    def test_module_description_detail_images(self):
+        """新版模块化详情（desc 接口为空）：nodeMap.module_description.privateData 提取详情图。"""
+        html = """
+        <script>window.detailData = {
+          "globalData": {"product": {"subject": "模块化商品",
+            "mediaItems": [{"type": "image", "imageUrl": {"big": "https://sc04.alicdn.com/kf/Hmain.jpg"}}]}},
+          "nodeMap": {"module_description": {"privateData": {
+            "companyInfo": {"title": "公司介绍", "imageSetDetails": [
+              {"details": [
+                {"type": "image", "url": "https://sc04.alicdn.com/kf/Hcompany1.jpg"},
+                {"type": "text", "text": "介绍文字"},
+                {"type": "image", "url": "//sc04.alicdn.com/kf/Hcompany2.jpg"}]},
+              {"details": [{"type": "image", "url": "https://sc04.alicdn.com/kf/Hfactory1.jpg"}]}
+            ]},
+            "productDescription": {"title": "Product Description", "details": [
+              {"type": "text", "text": "描述文字"},
+              {"type": "image", "url": "https://sc04.alicdn.com/kf/Hspec1.jpg"}
+            ]}
+          }}}
+        };</script>
+        """
+        ms = extract_media(html, SAMPLE_PRODUCT_URL)
+        assert ms.detail_images == [
+            "https://sc04.alicdn.com/kf/Hcompany1.jpg",
+            "https://sc04.alicdn.com/kf/Hcompany2.jpg",
+            "https://sc04.alicdn.com/kf/Hfactory1.jpg",
+            "https://sc04.alicdn.com/kf/Hspec1.jpg",
+        ]
+
+    def test_module_description_missing_safe(self):
+        """无 module_description 模块时详情图不受影响、不报错。"""
+        html = """
+        <script>window.detailData = {
+          "globalData": {"product": {"subject": "普通商品", "mediaItems": [
+            {"type": "image", "imageUrl": {"big": "https://sc04.alicdn.com/kf/Hmain.jpg"}}]}},
+          "nodeMap": {}
+        };</script>
+        """
+        ms = extract_media(html, SAMPLE_PRODUCT_URL)
+        assert ms.main_images == ["https://sc04.alicdn.com/kf/Hmain.jpg"]
+        assert ms.detail_images == []
+
     def test_no_detail_data(self):
         ms = extract_media("<html><body>no data</body></html>", SAMPLE_PRODUCT_URL)
         assert ms.title is None

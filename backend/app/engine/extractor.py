@@ -81,6 +81,9 @@ def extract_media(html: str, page_url: str) -> MediaSet:
     detail_videos: list[str] = []
     if detail_html:
         detail_images, detail_videos = _extract_from_description(detail_html, page_url)
+    # 新版模块化详情图（nodeMap.module_description）：desc 接口对该类商品返回空，
+    # 详情图直接以结构化字段内嵌在 detailData 中
+    detail_images = _dedupe(detail_images + _extract_module_description_images(data, page_url))
 
     return MediaSet(
         title=title,
@@ -192,6 +195,47 @@ def _extract_product(data: dict) -> dict:
         if isinstance(gd, dict):
             product = gd.get("product")
     return product if isinstance(product, dict) else {}
+
+
+def _extract_module_description_images(data: dict, page_url: str) -> list[str]:
+    """新版模块化详情图：``nodeMap.module_description.privateData`` 中的图片。
+
+    该形态商品 desc 接口返回空（无 productHtmlDescription），详情图以结构化
+    字段内嵌在 detailData：``companyInfo.imageSetDetails[].details[].url``
+    （公司介绍/工厂/生产流程等分组图）与 ``productDescription.details[].url``
+    （产品描述规格图，Ai_Spec_Image）。仅取 ``type=="image"`` 项，urljoin 补齐。
+    """
+    if not isinstance(data, dict):
+        return []
+    try:
+        node_map = data.get("nodeMap") or {}
+        if not isinstance(node_map, dict):
+            return []
+        mod = node_map.get("module_description") or {}
+        private = mod.get("privateData") if isinstance(mod, dict) else None
+        if not isinstance(private, dict):
+            return []
+    except Exception:
+        return []
+
+    images: list[str] = []
+    for section_key in ("companyInfo", "productDescription"):
+        section = private.get(section_key)
+        if not isinstance(section, dict):
+            continue
+        groups = section.get("imageSetDetails")
+        if not isinstance(groups, list) or not groups:
+            groups = [section]
+        for group in groups:
+            if not isinstance(group, dict):
+                continue
+            for item in group.get("details") or []:
+                if not isinstance(item, dict) or item.get("type") != "image":
+                    continue
+                url = item.get("url")
+                if isinstance(url, str) and url.strip():
+                    images.append(urljoin(page_url, url.strip()))
+    return _dedupe(images)
 
 
 def _extract_image_url(item: dict) -> str | None:
